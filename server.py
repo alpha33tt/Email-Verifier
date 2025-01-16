@@ -1,12 +1,18 @@
 from flask import Flask, render_template, request, jsonify
 import uuid
-import dns.resolver  # For MX record checking
-import smtplib       # For SMTP verification
-import os            # Don't forget to import 'os'
+import dns.resolver
+import smtplib
+import os
+import re
+import jwt
+import datetime
 from concurrent.futures import ThreadPoolExecutor
-import re            # For syntax checking of emails
+from secrets import token_urlsafe
 
 app = Flask(__name__)
+
+# Secret key for JWT encoding/decoding
+app.config['SECRET_KEY'] = 'your_secret_key'  # Change this to a random, secure key
 
 # In-memory storage for simplicity
 api_keys = {}
@@ -20,24 +26,36 @@ executor = ThreadPoolExecutor(max_workers=10)  # Adjust the number of concurrent
 def index():
     return render_template("index.html")
 
-# API endpoint to generate an API key
+# API endpoint to generate an API key (JWT)
 @app.route("/generate-api-key", methods=["POST"])
 def generate_api_key():
-    api_key = str(uuid.uuid4())  # Generate a unique API key
-    api_keys[api_key] = {"used_today": 0}
-    return jsonify({"api_key": api_key})
+    # Generate a secure token
+    api_key = token_urlsafe(32)  # Strong API key generation
+    expiration = datetime.datetime.utcnow() + datetime.timedelta(days=1)  # 1 day expiration
 
-# Route for the Email Validation page
-@app.route("/verify")
-def verify_page():
-    return render_template("verify.html")
+    # Encode the JWT with expiration and key
+    token = jwt.encode({'api_key': api_key, 'exp': expiration}, app.config['SECRET_KEY'], algorithm='HS256')
+    api_keys[api_key] = {"used_today": 0}
+    return jsonify({"api_key": token})
 
 # API endpoint to validate emails
 @app.route("/api/verify", methods=["POST"])
 def verify_emails():
-    api_key = request.headers.get("API-Key")
-    if not api_key or api_key not in api_keys:
-        return jsonify({"error": "Invalid or missing API key"}), 403
+    api_key_token = request.headers.get("API-Key")
+    if not api_key_token:
+        return jsonify({"error": "API key is missing"}), 403
+
+    try:
+        # Decode JWT and validate expiration
+        decoded_token = jwt.decode(api_key_token, app.config['SECRET_KEY'], algorithms=['HS256'])
+        api_key = decoded_token['api_key']
+    except jwt.ExpiredSignatureError:
+        return jsonify({"error": "API key has expired"}), 403
+    except jwt.InvalidTokenError:
+        return jsonify({"error": "Invalid API key"}), 403
+
+    if api_key not in api_keys:
+        return jsonify({"error": "Invalid API key"}), 403
 
     if api_keys[api_key]["used_today"] >= daily_limit:
         return jsonify({"error": "Daily limit reached"}), 403
@@ -118,7 +136,6 @@ def verify_smtp(mx_record):
 
 def check_blacklist(domain):
     """Dummy blacklist check. This should be replaced with a real blacklist API."""
-    # For demonstration, consider 'example.com' as blacklisted.
     blacklisted_domains = ['example.com']
     return domain in blacklisted_domains
 
