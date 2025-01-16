@@ -1,5 +1,3 @@
-import random
-import string
 import re
 import smtplib
 import dns.resolver
@@ -89,18 +87,6 @@ def verify_emails():
 @app.route('/')
 def index():
     return render_template('index.html')  # This will render the index.html from templates/
-
-# Function to generate random invalid emails (for testing only)
-def generate_invalid_emails(num_emails=10):
-    invalid_emails = []
-    fake_domains = ["example.fake", "nonexistent.domain", "test.invalid", "random123.xyz", "noexists.com"]
-    
-    for _ in range(num_emails):
-        prefix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=10))  # Random prefix
-        domain = random.choice(fake_domains)  # Random invalid domain
-        invalid_emails.append(f"{prefix}@{domain}")
-    
-    return invalid_emails
 
 # For testing purposes, you can generate a batch of invalid emails and print them
 if __name__ == '__main__':
