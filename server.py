@@ -1,4 +1,7 @@
+import random
+import string
 import re
+import smtplib
 import dns.resolver
 from flask import Flask, request, jsonify, render_template
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -8,7 +11,7 @@ import os
 app = Flask(__name__)
 
 # Regular expression for email validation
-EMAIL_REGEX = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+EMAIL_REGEX = r"^[a-zA-Z0-9._%+-]+@[a-zAYZ0-9.-]+\.[a-zA-Z]{2,}$"
 
 # Cache for DNS lookups (TTL: 300 seconds, max size: 1000 entries)
 dns_cache = TTLCache(maxsize=1000, ttl=300)
@@ -16,27 +19,56 @@ dns_cache = TTLCache(maxsize=1000, ttl=300)
 # Thread pool for concurrent processing
 executor = ThreadPoolExecutor(max_workers=10)
 
+# This function performs an SMTP check to verify the email address
+def smtp_check(email):
+    domain = email.split('@')[-1]
+    
+    try:
+        # Check MX records to find the mail server
+        answers = dns.resolver.resolve(domain, 'MX')
+        mx_record = str(answers[0].exchange)
+        
+        # Create an SMTP connection
+        with smtplib.SMTP(mx_record) as server:
+            server.set_debuglevel(0)  # Turn off debug output
+            server.helo()  # Greet the server
+            server.mail('me@domain.com')  # The sender (can be anything)
+            code, message = server.rcpt(email)  # Try to send to the recipient
+
+            # If the server returns a success code (250), the email is valid
+            if code == 250:
+                return True
+            else:
+                return False
+    except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, smtplib.SMTPException, Exception) as e:
+        # In case of DNS lookup failure or SMTP errors, consider the email invalid
+        return False
+
+# This is the function to check email validity
 def is_valid_email(email):
     # Check email format
     if not re.match(EMAIL_REGEX, email):
         return False
 
-    # Extract domain from email
-    domain = email.split('@')[-1]
+    # Check SMTP for validity
+    if not smtp_check(email):
+        return False
 
-    # Check DNS cache
+    # Check DNS cache to avoid redundant queries
+    domain = email.split('@')[-1]
     if domain in dns_cache:
         return dns_cache[domain]
 
     try:
-        # Check if domain has MX records
+        # Check MX record (Mail Exchange) for the domain
         dns.resolver.resolve(domain, 'MX')
         dns_cache[domain] = True
         return True
-    except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.exception.Timeout):
+    except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.exception.Timeout):
         dns_cache[domain] = False
         return False
 
+# API endpoint to verify emails
 @app.route('/verify', methods=['POST'])
 def verify_emails():
     data = request.get_json()
@@ -45,7 +77,7 @@ def verify_emails():
     if len(emails) > 2000:
         return jsonify({"error": "Too many emails, please verify in smaller batches."}), 400
 
-    # List to store results
+    # List to store valid results
     valid_emails = []
 
     # Break emails into batches of 200 or less
@@ -73,5 +105,22 @@ def process_batch(batch):
 def index():
     return render_template('index.html')  # This will render the index.html from templates/
 
+# Function to generate random invalid emails
+def generate_invalid_emails(num_emails=10):
+    invalid_emails = []
+    fake_domains = ["example.fake", "nonexistent.domain", "test.invalid", "random123.xyz", "noexists.com"]
+    
+    for _ in range(num_emails):
+        prefix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=10))  # Random prefix
+        domain = random.choice(fake_domains)  # Random invalid domain
+        invalid_emails.append(f"{prefix}@{domain}")
+    
+    return invalid_emails
+
+# For testing purposes, you can generate a batch of invalid emails and print them
 if __name__ == '__main__':
+    # Generate random invalid emails (for testing only)
+    invalid_emails = generate_invalid_emails(10)  # You can change the number here
+    print("Generated invalid emails:", invalid_emails)
+    
     app.run(debug=True, host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
