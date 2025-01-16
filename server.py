@@ -3,13 +3,17 @@ import uuid
 import dns.resolver  # For MX record checking
 import smtplib       # For SMTP verification
 import os            # Don't forget to import 'os'
-import requests      # For blacklist checking (if you are using an API to check blacklists)
+from concurrent.futures import ThreadPoolExecutor
+import re            # For syntax checking of emails
 
 app = Flask(__name__)
 
 # In-memory storage for simplicity
 api_keys = {}
 daily_limit = 1000
+
+# Setup ThreadPoolExecutor to parallelize email validation tasks
+executor = ThreadPoolExecutor(max_workers=10)  # Adjust the number of concurrent tasks
 
 # Route for the API Key generation page
 @app.route("/")
@@ -43,84 +47,90 @@ def verify_emails():
     valid_emails = []
     invalid_emails = []
 
-    for email in emails:
-        result = validate_email(email)
+    # Use ThreadPoolExecutor to process emails in parallel
+    futures = [executor.submit(validate_single_email, email) for email in emails]
+    
+    # Wait for all futures to complete and collect results
+    for future in futures:
+        result = future.result()
         if result["valid"]:
             valid_emails.append(result)
         else:
-            invalid_emails.append(email)
+            invalid_emails.append(result["email"])
 
     api_keys[api_key]["used_today"] += len(emails)
 
     return jsonify({"valid": valid_emails, "invalid": invalid_emails})
 
-def validate_email(email):
-    """Validate email using Syntax, MX, SMTP, Blacklist check, and Risk scoring."""
+def validate_single_email(email):
+    """Validates a single email address."""
+    result = {"email": email}
     try:
         # Syntax Check
         if not is_valid_email_syntax(email):
-            return {"email": email, "valid": False, "error": "Invalid email syntax"}
+            result["valid"] = False
+            result["error"] = "Invalid email syntax"
+            return result
 
-        # Check MX record
+        # MX Record Lookup
         domain = email.split('@')[1]
         mx_records = dns.resolver.resolve(domain, 'MX')
         mx_record = str(mx_records[0].exchange)
 
-        # Verify with SMTP (optional)
+        # SMTP Verification (optional, but recommended)
         smtp_verified = verify_smtp(mx_record)
 
-        # Blacklist check (e.g., Spamhaus or other service)
+        # Blacklist Check (can use an external API or a list of known blacklisted domains)
         blacklisted = check_blacklist(domain)
 
-        # Risk score (could be based on some internal logic or third-party API)
+        # Risk Scoring (based on various factors)
         risk_score = calculate_risk_score(smtp_verified, blacklisted)
 
-        return {
-            "email": email,
+        # If all checks are valid
+        result.update({
             "valid": True,
             "mx_record": mx_record,
             "smtp_verified": smtp_verified,
             "blacklisted": blacklisted,
             "risk_score": risk_score
-        }
+        })
+
     except Exception as e:
-        return {"email": email, "valid": False, "error": str(e)}
+        result["valid"] = False
+        result["error"] = str(e)
+
+    return result
 
 def is_valid_email_syntax(email):
-    """Basic syntax validation for the email."""
-    import re
-    regex = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
-    return re.match(regex, email) is not None
+    """Check the basic syntax of an email address."""
+    regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    return bool(re.match(regex, email))
 
 def verify_smtp(mx_record):
-    """Try to verify the email with SMTP."""
+    """Verify SMTP for the domain (simplified version)."""
     try:
         smtp = smtplib.SMTP(mx_record)
-        smtp.starttls()
+        smtp.set_debuglevel(0)
         smtp.quit()
         return True
     except Exception:
         return False
 
 def check_blacklist(domain):
-    """Check if the domain is blacklisted (example using Spamhaus)."""
-    try:
-        response = requests.get(f"https://api.spamhaus.org/lookup?domain={domain}")
-        if response.status_code == 200 and response.json().get('blacklisted'):
-            return True
-        return False
-    except Exception:
-        return False
+    """Dummy blacklist check. This should be replaced with a real blacklist API."""
+    # For demonstration, consider 'example.com' as blacklisted.
+    blacklisted_domains = ['example.com']
+    return domain in blacklisted_domains
 
 def calculate_risk_score(smtp_verified, blacklisted):
-    """Calculate a basic risk score (0 to 100)."""
-    score = 100
-    if not smtp_verified:
-        score -= 40  # Penalize if SMTP verification fails
-    if blacklisted:
-        score -= 30  # Penalize if the domain is blacklisted
+    """Calculate risk score based on SMTP verification and blacklist status."""
+    score = 0
+    if smtp_verified:
+        score += 50
+    if not blacklisted:
+        score += 30
     return score
 
 # For testing purposes, you can generate a batch of invalid emails and print them
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))  # This will allow the app to run
+    app.run(debug=True, host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))  # This line should now work correctly
