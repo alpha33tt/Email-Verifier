@@ -1,9 +1,9 @@
+from flask import Flask, render_template, request, jsonify
+import os
 import re
 import dns.resolver
-from flask import Flask, request, jsonify
 from concurrent.futures import ThreadPoolExecutor
 from cachetools import TTLCache
-import os  # Add this import
 
 app = Flask(__name__)
 
@@ -15,6 +15,20 @@ dns_cache = TTLCache(maxsize=1000, ttl=300)
 
 # Thread pool for concurrent processing
 executor = ThreadPoolExecutor(max_workers=10)
+
+@app.route('/')
+def index():
+    return render_template('index.html')  # Render the HTML page from the templates folder
+
+@app.route('/verify', methods=['POST'])
+def verify_emails():
+    data = request.get_json()
+    emails = data.get('emails', [])
+
+    # Concurrently process emails
+    results = list(executor.map(is_valid_email, emails))
+    valid_emails = [email for email, valid in zip(emails, results) if valid]
+    return jsonify({'validEmails': valid_emails})
 
 def is_valid_email(email):
     # Check email format
@@ -36,16 +50,6 @@ def is_valid_email(email):
     except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.exception.Timeout):
         dns_cache[domain] = False
         return False
-
-@app.route('/verify', methods=['POST'])
-def verify_emails():
-    data = request.get_json()
-    emails = data.get('emails', [])
-
-    # Concurrently process emails
-    results = list(executor.map(is_valid_email, emails))
-    valid_emails = [email for email, valid in zip(emails, results) if valid]
-    return jsonify({'validEmails': valid_emails})
 
 # For testing purposes, you can generate a batch of invalid emails and print them
 if __name__ == '__main__':
