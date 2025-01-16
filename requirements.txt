@@ -1,4 +1,5 @@
-Flask==2.2.2
+Flask==2.2.3  # Update Flask to the latest version
+Werkzeug==2.2.3  # Update Werkzeug to match the Flask version
 dnspython==2.2.1
 cachetools==5.0.0
 aiodns==3.0.0
