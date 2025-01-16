@@ -106,7 +106,7 @@
             const { validEmails } = await response.json();
             progressBar.value = 100;
 
-            // Check if valid emails were returned
+            // Display valid emails or an error message
             if (validEmails.length > 0) {
                 output.textContent = validEmails.join('\n');
                 document.getElementById('copyButton').style.display = 'block';
