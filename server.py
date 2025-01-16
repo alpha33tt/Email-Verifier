@@ -1,6 +1,6 @@
 import re
 import dns.resolver
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 from concurrent.futures import ThreadPoolExecutor
 from cachetools import TTLCache
 import os
@@ -36,6 +36,11 @@ def is_valid_email(email):
     except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.exception.Timeout):
         dns_cache[domain] = False
         return False
+
+# Route to serve index.html (home page)
+@app.route('/')
+def home():
+    return render_template('index.html')  # This assumes index.html is in the templates folder
 
 @app.route('/verify', methods=['POST'])
 def verify_emails():
