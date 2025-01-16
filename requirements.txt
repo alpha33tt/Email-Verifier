@@ -1,3 +1,6 @@
-Flask
-dnspython
-cachetools
+Flask==2.2.2
+dns.resolver==2.0.0
+cachetools==5.2.1
+smtplib==3.9.1
+email==6.0.0
+gunicorn==20.1.0
