@@ -63,8 +63,7 @@ dns_cache = TTLCache(maxsize=1000, ttl=300)
 # Thread pool for concurrent processing
 executor = ThreadPoolExecutor(max_workers=10)
 
-def is_valid_email(email)
-:
+def is_valid_email(email):
     # Check email format
     if not re.match(EMAIL_REGEX, email):
         return False
