@@ -1,9 +1,9 @@
+from flask import Flask, render_template, jsonify, request
 import smtplib
 import dns.resolver
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import uuid
-from flask import Flask, jsonify, request
 import os
 
 app = Flask(__name__)
@@ -12,6 +12,11 @@ app = Flask(__name__)
 api_keys = {}
 daily_limit = 1000
 
+# Route for the API Key generation page
+@app.route("/")
+def index():
+    return render_template("index.html")  # Ensure 'index.html' exists in your templates folder
+
 # Generate API Key
 @app.route("/generate-api-key", methods=["POST"])
 def generate_api_key():
@@ -19,11 +24,16 @@ def generate_api_key():
     api_keys[api_key] = {"used_today": 0}
     return jsonify({"api_key": api_key})
 
+# Route for the Email Validation page
+@app.route("/verify")
+def verify_page():
+    return render_template("verify.html")  # Ensure 'verify.html' exists in your templates folder
+
 # Send a test email to verify SMTP
 def send_test_email(to_email, mx_record):
     try:
         # Set up the test email content
-        sender_email = "cardonewhite081@gmail.com"  # Use your own email here
+        sender_email = "your_email@gmail.com"  # Use your own email here
         message = MIMEMultipart()
         message["From"] = sender_email
         message["To"] = to_email
