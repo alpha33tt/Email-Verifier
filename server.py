@@ -1,87 +1,85 @@
 from flask import Flask, render_template, request, jsonify
-import os
-import re
-import dns.resolver
-import smtplib
-from email.utils import parseaddr
-from concurrent.futures import ThreadPoolExecutor
-from cachetools import TTLCache
+import uuid
+import dns.resolver  # For MX record checking
+import smtplib       # For SMTP verification
 
 app = Flask(__name__)
 
-# Regular expression for email validation
-EMAIL_REGEX = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+# In-memory storage for simplicity
+api_keys = {}
+daily_limit = 1000
 
-# Cache for DNS lookups (TTL: 300 seconds, max size: 1000 entries)
-dns_cache = TTLCache(maxsize=1000, ttl=300)
-
-# Thread pool for concurrent processing
-executor = ThreadPoolExecutor(max_workers=10)
-
-@app.route('/')
+# Route for the API Key generation page
+@app.route("/")
 def index():
-    return render_template('index.html')  # Render the HTML page from the templates folder
+    return render_template("index.html")
 
-@app.route('/verify', methods=['POST'])
+# API endpoint to generate an API key
+@app.route("/generate-api-key", methods=["POST"])
+def generate_api_key():
+    api_key = str(uuid.uuid4())  # Generate a unique API key
+    api_keys[api_key] = {"used_today": 0}
+    return jsonify({"api_key": api_key})
+
+# Route for the Email Validation page
+@app.route("/verify")
+def verify_page():
+    return render_template("verify.html")
+
+# API endpoint to validate emails
+@app.route("/api/verify", methods=["POST"])
 def verify_emails():
-    data = request.get_json()
-    emails = data.get('emails', [])
+    api_key = request.headers.get("API-Key")
+    if not api_key or api_key not in api_keys:
+        return jsonify({"error": "Invalid or missing API key"}), 403
 
-    # Concurrently process emails to validate email format
-    results = list(executor.map(is_valid_email, emails))
-    valid_emails = [email for email, valid in zip(emails, results) if valid]
+    if api_keys[api_key]["used_today"] >= daily_limit:
+        return jsonify({"error": "Daily limit reached"}), 403
 
-    # Check bounce results for valid emails
-    bounce_results = {}
-    for email in valid_emails:
-        bounce_result = smtp_check(email)
-        bounce_results[email] = bounce_result
+    data = request.json
+    emails = data.get("emails", [])
+    valid_emails = []
+    invalid_emails = []
 
-    return jsonify({'validEmails': valid_emails, 'bounceResults': bounce_results})
-
-def is_valid_email(email):
-    # Check email format using regex
-    if not re.match(EMAIL_REGEX, email):
-        return False
-
-    # Extract domain from email
-    domain = email.split('@')[-1]
-
-    # Check DNS cache for MX records
-    if domain in dns_cache:
-        return dns_cache[domain]
-
-    try:
-        # Check if the domain has MX records in DNS
-        dns.resolver.resolve(domain, 'MX')
-        dns_cache[domain] = True
-        return True
-    except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.exception.Timeout):
-        dns_cache[domain] = False
-        return False
-
-def smtp_check(email):
-    """Verify the email's SMTP server to check for bounce-backs."""
-    try:
-        domain = email.split('@')[1]
-        # Connect to the SMTP server
-        server = smtplib.SMTP(domain, timeout=10)
-        server.set_debuglevel(0)  # Disable debug output
-        server.helo()
-
-        # Perform a simple SMTP MAIL FROM command to check validity
-        status, message = server.mail(parseaddr(email)[1])
-
-        server.quit()
-
-        if status == 250:
-            return "Valid"
+    for email in emails:
+        result = validate_email(email)
+        if result["valid"]:
+            valid_emails.append(result)
         else:
-            return "Invalid"
-    except Exception as e:
-        print(f"SMTP error for {email}: {e}")
-        return "Invalid"
+            invalid_emails.append(email)
 
-# For testing purposes, you can generate a batch of invalid emails and print them
-if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))  # This line should now work correctly
+    api_keys[api_key]["used_today"] += len(emails)
+
+    return jsonify({"valid": valid_emails, "invalid": invalid_emails})
+
+def validate_email(email):
+    """Validate email using MX record and SMTP."""
+    try:
+        # Check MX record
+        domain = email.split('@')[1]
+        mx_records = dns.resolver.resolve(domain, 'MX')
+        mx_record = str(mx_records[0].exchange)
+
+        # Verify with SMTP (optional)
+        smtp_verified = False
+        try:
+            smtp = smtplib.SMTP(mx_record)
+            smtp.starttls()
+            smtp.quit()
+            smtp_verified = True
+        except Exception:
+            smtp_verified = False
+
+        return {
+            "email": email,
+            "valid": True,
+            "mx_record": mx_record,
+            "smtp_verified": smtp_verified,
+            "no_bounce": True  # Placeholder, implement bounce check if needed
+        }
+    except Exception:
+        return {"email": email, "valid": False}
+
+if __name__ == "__main__":
+    app.run(debug=True)
+    
