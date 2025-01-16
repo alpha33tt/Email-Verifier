@@ -1,2 +1,2 @@
-Flask==2.3.3
-dnspython==2.3.1
+Flask
+dnspython
