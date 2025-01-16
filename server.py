@@ -27,33 +27,32 @@ def verify_emails():
     data = request.get_json()
     emails = data.get('emails', [])
 
-    # Verify the first email in the list
-    email = emails[0] if emails else None
-    if email:
-        is_valid = is_valid_email(email)
-        if is_valid:
-            bounce_result = smtp_check(email)
-            return jsonify({
-                'validEmails': [email] if bounce_result == "Valid" else [],
-                'bounceResults': {email: bounce_result}
-            })
-    
-    return jsonify({'validEmails': [], 'bounceResults': {}})
+    # Concurrently process emails to validate email format
+    results = list(executor.map(is_valid_email, emails))
+    valid_emails = [email for email, valid in zip(emails, results) if valid]
+
+    # Check bounce results for valid emails
+    bounce_results = {}
+    for email in valid_emails:
+        bounce_result = smtp_check(email)
+        bounce_results[email] = bounce_result
+
+    return jsonify({'validEmails': valid_emails, 'bounceResults': bounce_results})
 
 def is_valid_email(email):
-    # Check email format
+    # Check email format using regex
     if not re.match(EMAIL_REGEX, email):
         return False
 
     # Extract domain from email
     domain = email.split('@')[-1]
 
-    # Check DNS cache
+    # Check DNS cache for MX records
     if domain in dns_cache:
         return dns_cache[domain]
 
     try:
-        # Check if domain has MX records
+        # Check if the domain has MX records in DNS
         dns.resolver.resolve(domain, 'MX')
         dns_cache[domain] = True
         return True
@@ -67,10 +66,10 @@ def smtp_check(email):
         domain = email.split('@')[1]
         # Connect to the SMTP server
         server = smtplib.SMTP(domain, timeout=10)
-        server.set_debuglevel(0)  # No debug output
+        server.set_debuglevel(0)  # Disable debug output
         server.helo()
 
-        # Perform a simple SMTP MAIL FROM command
+        # Perform a simple SMTP MAIL FROM command to check validity
         status, message = server.mail(parseaddr(email)[1])
 
         server.quit()
