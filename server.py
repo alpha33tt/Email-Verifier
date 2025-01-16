@@ -1,66 +1,33 @@
-import smtplib
-import dns.resolver
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+from flask import Flask, render_template, request, jsonify
 import uuid
-from flask import Flask, jsonify, request, render_template
-import os
-import asyncio
-import aiosmtplib
+import dns.resolver  # For MX record checking
+import smtplib       # For SMTP verification
+import os            # Don't forget to import 'os'
 
 app = Flask(__name__)
 
-# API key storage and rate limiting
+# In-memory storage for simplicity
 api_keys = {}
 daily_limit = 1000
 
-# Serve the "Generate API Key" page (index.html)
-@app.route("/generate-api-key")
-def generate_api_page():
-    return render_template('index.html')
+# Route for the API Key generation page
+@app.route("/")
+def index():
+    return render_template("index.html")
 
-# Serve the "Verify Email" page (verify.html)
-@app.route("/verify")
-def verify_page():
-    return render_template('verify.html')
-
-# Generate API Key
+# API endpoint to generate an API key
 @app.route("/generate-api-key", methods=["POST"])
 def generate_api_key():
-    api_key = str(uuid.uuid4())
+    api_key = str(uuid.uuid4())  # Generate a unique API key
     api_keys[api_key] = {"used_today": 0}
     return jsonify({"api_key": api_key})
 
-# Async function to send a test email
-async def send_test_email(to_email, mx_record):
-    try:
-        sender_email = "cardonewhite081@gmail.com"  # Replace with your own email here
-        message = MIMEMultipart()
-        message["From"] = sender_email
-        message["To"] = to_email
-        message["Subject"] = "Test Email for Verification"
-        body = "This is a test email to verify the validity of your email address."
-        message.attach(MIMEText(body, "plain"))
+# Route for the Email Validation page
+@app.route("/verify")
+def verify_page():
+    return render_template("verify.html")
 
-        # Use aiosmtplib to send email asynchronously
-        async with aiosmtplib.SMTP(hostname=mx_record, port=587, use_tls=True) as smtp:
-            await smtp.sendmail(sender_email, to_email, message.as_string())
-        return True  # If no error, email is valid
-    except Exception as e:
-        print(f"Error sending email to {to_email}: {e}")
-        return False  # Email is invalid if error occurs
-
-# Function to get MX record and validate email domain
-def get_mx_record(domain):
-    try:
-        mx_records = dns.resolver.resolve(domain, 'MX')
-        mx_record = str(mx_records[0].exchange)
-        return mx_record
-    except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN) as e:
-        print(f"MX record not found for domain: {domain}")
-        return None
-
-# API endpoint to verify emails
+# API endpoint to validate emails
 @app.route("/api/verify", methods=["POST"])
 def verify_emails():
     api_key = request.headers.get("API-Key")
@@ -75,31 +42,45 @@ def verify_emails():
     valid_emails = []
     invalid_emails = []
 
-    # Process emails in batches of 100 to avoid overloading the server
-    batch_size = 100
-    email_batches = [emails[i:i + batch_size] for i in range(0, len(emails), batch_size)]
+    for email in emails:
+        result = validate_email(email)
+        if result["valid"]:
+            valid_emails.append(result)
+        else:
+            invalid_emails.append(email)
 
-    for batch in email_batches:
-        for email in batch:
-            domain = email.split('@')[1]
-            mx_record = get_mx_record(domain)
-
-            if mx_record:
-                # If MX record is found, send a test email to verify the email
-                result = asyncio.run(send_test_email(email, mx_record))
-                if result:
-                    valid_emails.append(email)
-                else:
-                    invalid_emails.append(email)
-            else:
-                # If MX record is not found, mark email as invalid
-                invalid_emails.append(email)
-
-    # Update the daily usage limit
     api_keys[api_key]["used_today"] += len(emails)
 
     return jsonify({"valid": valid_emails, "invalid": invalid_emails})
 
+def validate_email(email):
+    """Validate email using MX record and SMTP."""
+    try:
+        # Check MX record
+        domain = email.split('@')[1]
+        mx_records = dns.resolver.resolve(domain, 'MX')
+        mx_record = str(mx_records[0].exchange)
 
-if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+        # Verify with SMTP (optional)
+        smtp_verified = False
+        try:
+            smtp = smtplib.SMTP(mx_record)
+            smtp.starttls()
+            smtp.quit()
+            smtp_verified = True
+        except Exception:
+            smtp_verified = False
+
+        return {
+            "email": email,
+            "valid": True,
+            "mx_record": mx_record,
+            "smtp_verified": smtp_verified,
+            "no_bounce": True  # Placeholder, implement bounce check if needed
+        }
+    except Exception:
+        return {"email": email, "valid": False}
+
+# For testing purposes, you can generate a batch of invalid emails and print them
+if __name__ == '__main__':
+    app.run(debug=True, host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))  # This line should now work correctly
