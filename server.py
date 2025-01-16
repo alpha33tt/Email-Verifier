@@ -1,12 +1,11 @@
 import re
 import dns.resolver
-import smtplib
-from flask import Flask, request, jsonify
-from concurrent.futures import ThreadPoolExecutor
+from flask import Flask, request, jsonify, send_from_directory
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from cachetools import TTLCache
 import os
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder="static")
 
 # Regular expression for email validation
 EMAIL_REGEX = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
@@ -16,9 +15,6 @@ dns_cache = TTLCache(maxsize=1000, ttl=300)
 
 # Thread pool for concurrent processing
 executor = ThreadPoolExecutor(max_workers=10)
-
-# SMTP server settings (use mail server IP or host)
-SMTP_TIMEOUT = 10  # Timeout for SMTP connection
 
 def is_valid_email(email):
     # Check email format
@@ -36,39 +32,9 @@ def is_valid_email(email):
         # Check if domain has MX records
         dns.resolver.resolve(domain, 'MX')
         dns_cache[domain] = True
-        # Use SMTP to check if email is valid
-        if verify_smtp_email(email):
-            return True
-        else:
-            dns_cache[domain] = False
-            return False
+        return True
     except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.exception.Timeout):
         dns_cache[domain] = False
-        return False
-
-def verify_smtp_email(email):
-    domain = email.split('@')[-1]
-    try:
-        # Get the mail server for the domain (MX record lookup)
-        mx_records = dns.resolver.resolve(domain, 'MX')
-        mail_server = str(mx_records[0].exchange)
-
-        # Connect to the mail server
-        with smtplib.SMTP(mail_server, 25, timeout=SMTP_TIMEOUT) as server:
-            server.set_debuglevel(0)  # Disable debug output
-
-            # Try to connect and send a RCPT TO command
-            server.helo()  # Say hello to the server
-            server.mail('example@domain.com')  # Sender email (dummy sender)
-            code, message = server.rcpt(email)  # Try to check recipient
-
-            # If 250 response code is returned, the email is valid
-            if code == 250:
-                return True
-            else:
-                return False
-    except (smtplib.SMTPException, dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, Exception) as e:
-        print(f"SMTP validation failed for {email}: {str(e)}")
         return False
 
 @app.route('/verify', methods=['POST'])
@@ -76,11 +42,36 @@ def verify_emails():
     data = request.get_json()
     emails = data.get('emails', [])
 
-    # Concurrently process emails
-    results = list(executor.map(is_valid_email, emails))
-    valid_emails = [email for email, valid in zip(emails, results) if valid]
+    if len(emails) > 2000:
+        return jsonify({"error": "Too many emails, please verify in smaller batches."}), 400
+
+    # List to store results
+    valid_emails = []
+
+    # Break emails into batches of 200 or less
+    batch_size = 200
+    batches = [emails[i:i + batch_size] for i in range(0, len(emails), batch_size)]
+
+    # Process each batch concurrently
+    futures = []
+    for batch in batches:
+        future = executor.submit(process_batch, batch)
+        futures.append(future)
+
+    # Collect results from all futures
+    for future in as_completed(futures):
+        valid_emails.extend(future.result())
+
     return jsonify({'validEmails': valid_emails})
+
+def process_batch(batch):
+    results = [email for email in batch if is_valid_email(email)]
+    return results
+
+# Route to serve the index.html page
+@app.route('/')
+def index():
+    return send_from_directory('static', 'index.html')
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
-
