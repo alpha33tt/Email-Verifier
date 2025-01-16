@@ -11,7 +11,7 @@
 
     <form id="email-form">
         <label for="emails">Enter Emails (comma separated):</label>
-        <input type="text" id="emails" name="emails">
+        <input type="text" id="emails" name="emails" required>
         <button type="submit">Validate</button>
     </form>
 
@@ -24,6 +24,24 @@
     </div>
 
     <script>
+        // Store the API key for later use
+        var apiKey = ''; 
+
+        // Fetch API key from server when the page loads
+        $(document).ready(function() {
+            $.ajax({
+                url: '/generate-api-key',
+                type: 'POST',
+                success: function(response) {
+                    apiKey = response.api_key;  // Store the API key
+                    console.log("API Key generated: " + apiKey);
+                },
+                error: function(error) {
+                    console.log('Error generating API key: ', error);
+                }
+            });
+        });
+
         // Event listener for form submission
         $('#email-form').submit(function(event) {
             event.preventDefault(); // Prevent the default form submission
@@ -31,11 +49,14 @@
             // Get the emails from the input field
             var emails = $('#emails').val().split(',');
 
-            // Send a POST request to the Flask server
+            // Send a POST request to the Flask server for email validation
             $.ajax({
                 url: '/api/verify',
                 type: 'POST',
                 contentType: 'application/json',
+                headers: {
+                    'API-Key': apiKey  // Include the API key in the request headers
+                },
                 data: JSON.stringify({ emails: emails }),
                 success: function(response) {
                     // Clear previous results
