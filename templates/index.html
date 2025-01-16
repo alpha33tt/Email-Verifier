@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bulk Email Verifier</title>
+    <title>Optimized Bulk Email Verifier</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -71,7 +71,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>Bulk Email Verifier</h1>
+        <h1>Optimized Bulk Email Verifier</h1>
         <textarea id="emailInput" placeholder="Paste your emails here, separated by commas or new lines"></textarea>
         <button id="verifyButton">Verify Emails</button>
         <progress id="progressBar" value="0" max="100" style="display: none;"></progress>
@@ -106,14 +106,9 @@
             const { validEmails } = await response.json();
             progressBar.value = 100;
 
-            // Display valid emails or an error message
-            if (validEmails.length > 0) {
-                output.textContent = validEmails.join('\n');
-                document.getElementById('copyButton').style.display = 'block';
-                document.getElementById('downloadButton').style.display = 'block';
-            } else {
-                output.textContent = 'No valid emails found.';
-            }
+            output.textContent = validEmails.join('\n');
+            document.getElementById('copyButton').style.display = validEmails.length > 0 ? 'block' : 'none';
+            document.getElementById('downloadButton').style.display = validEmails.length > 0 ? 'block' : 'none';
         });
 
         document.getElementById('copyButton').addEventListener('click', () => {
