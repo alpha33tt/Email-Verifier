@@ -1,2 +1,3 @@
 Flask
 dnspython
+aiosmtplib
