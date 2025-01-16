@@ -64,33 +64,22 @@
 
         .result-section {
             margin-bottom: 20px;
-            padding: 15px;
-            border-radius: 5px;
         }
 
-        .valid-box {
-            background-color: #d4edda;
-            color: #155724;
-            border: 2px solid #c3e6cb;
+        .spinner {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
         }
 
-        .invalid-box {
-            background-color: #f8d7da;
-            color: #721c24;
-            border: 2px solid #f5c6cb;
-        }
-
-        .result-section h2 {
-            font-size: 20px;
-            color: #333;
-            text-decoration: underline;
-            margin-bottom: 10px;
+        .spinner img {
+            width: 50px;
+            height: 50px;
         }
 
         ul {
             list-style-type: none;
             padding: 0;
-            margin: 0;
         }
 
         li {
@@ -98,6 +87,16 @@
             margin: 5px 0;
             border-radius: 4px;
             background-color: #fff;
+        }
+
+        .valid {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .invalid {
+            background-color: #f8d7da;
+            color: #721c24;
         }
 
         .error-message {
@@ -120,12 +119,12 @@
     </div>
 
     <div id="results">
-        <div class="result-section valid-box" id="valid-results">
+        <div class="result-section" id="valid-results">
             <h2>Valid Emails</h2>
             <ul id="valid-emails"></ul>
         </div>
 
-        <div class="result-section invalid-box" id="invalid-results">
+        <div class="result-section" id="invalid-results">
             <h2>Invalid Emails</h2>
             <ul id="invalid-emails"></ul>
         </div>
@@ -133,10 +132,14 @@
         <div class="error-message" id="error-message"></div>
     </div>
 
+    <div class="spinner" id="spinner">
+        <img src="https://i.imgur.com/llF5iyg.gif" alt="Loading...">
+        <p>Verifying emails...</p>
+    </div>
+
     <script>
         var apiKey = ''; // API key will be dynamically fetched
 
-        // Fetch API key from server when the page loads
         $(document).ready(function() {
             $.ajax({
                 url: '/generate-api-key',
@@ -149,53 +152,49 @@
                     console.log('Error generating API key: ', error);
                 }
             });
-        });
 
-        // Event listener for form submission
-        $('#email-form').submit(function(event) {
-            event.preventDefault(); // Prevent the default form submission
+            $('#email-form').submit(function(event) {
+                event.preventDefault();
 
-            var emails = $('#emails').val().split(',').map(email => email.trim());
+                var emails = $('#emails').val().split(',').map(email => email.trim());
 
-            // Clear previous results
-            $('#valid-emails').empty();
-            $('#invalid-emails').empty();
-            $('#error-message').text('');
-
-            // Check if the email input is empty
-            if (emails.length === 0 || emails[0] === '') {
-                $('#error-message').text('Please enter at least one email address.');
-                return;
-            }
-
-            // Send a POST request to the Flask server for email validation
-            $.ajax({
-                url: '/api/verify',
-                type: 'POST',
-                contentType: 'application/json',
-                headers: {
-                    'API-Key': apiKey  // Include the API key in the request headers
-                },
-                data: JSON.stringify({ emails: emails }),
-                success: function(response) {
-                    // Display valid emails
-                    response.valid.forEach(function(email) {
-                        $('#valid-emails').append('<li>' + email.email + ' (MX: ' + email.mx_record + ', SMTP Verified: ' + email.smtp_verified + ')</li>');
-                    });
-
-                    // Display invalid emails
-                    response.invalid.forEach(function(email) {
-                        $('#invalid-emails').append('<li>' + email + '</li>');
-                    });
-
-                    // Handle case when no emails are valid or invalid
-                    if (response.valid.length === 0 && response.invalid.length === 0) {
-                        $('#error-message').text('No valid or invalid emails found.');
-                    }
-                },
-                error: function(error) {
-                    $('#error-message').text('Error: ' + error.responseText);
+                // Validate emails length
+                if (emails.length === 0 || emails[0] === '') {
+                    $('#error-message').text('Please enter at least one email address.');
+                    return;
                 }
+
+                $('#spinner').show();
+                $('#valid-emails').empty();
+                $('#invalid-emails').empty();
+                $('#error-message').text('');
+
+                $.ajax({
+                    url: '/api/verify',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    headers: {
+                        'API-Key': apiKey
+                    },
+                    data: JSON.stringify({ emails: emails }),
+                    success: function(response) {
+                        // Hide spinner
+                        $('#spinner').hide();
+
+                        // Show valid and invalid emails
+                        response.valid.forEach(function(email) {
+                            $('#valid-emails').append('<li class="valid">' + email + '</li>');
+                        });
+
+                        response.invalid.forEach(function(email) {
+                            $('#invalid-emails').append('<li class="invalid">' + email + '</li>');
+                        });
+                    },
+                    error: function(error) {
+                        $('#spinner').hide();
+                        $('#error-message').text('Error: ' + error.responseText);
+                    }
+                });
             });
         });
     </script>
