@@ -27,17 +27,18 @@ def verify_emails():
     data = request.get_json()
     emails = data.get('emails', [])
 
-    # Concurrently process emails
-    results = list(executor.map(is_valid_email, emails))
-    valid_emails = [email for email, valid in zip(emails, results) if valid]
-
-    # Check bounce-backs for valid emails
-    bounce_results = {email: smtp_check(email) for email in valid_emails}
-
-    return jsonify({
-        'validEmails': valid_emails,
-        'bounceResults': bounce_results
-    })
+    # Verify the first email in the list
+    email = emails[0] if emails else None
+    if email:
+        is_valid = is_valid_email(email)
+        if is_valid:
+            bounce_result = smtp_check(email)
+            return jsonify({
+                'validEmails': [email] if bounce_result == "Valid" else [],
+                'bounceResults': {email: bounce_result}
+            })
+    
+    return jsonify({'validEmails': [], 'bounceResults': {}})
 
 def is_valid_email(email):
     # Check email format
