@@ -1,9 +1,8 @@
 import re
-import smtplib
 import dns.resolver
-from flask import Flask, request, jsonify, render_template
-import socket
-import os
+from flask import Flask, request, jsonify
+from concurrent.futures import ThreadPoolExecutor
+from cachetools import TTLCache
 
 app = Flask(__name__)
 
@@ -11,82 +10,41 @@ app = Flask(__name__)
 EMAIL_REGEX = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
 
 # Cache for DNS lookups (TTL: 300 seconds, max size: 1000 entries)
-dns_cache = {}
+dns_cache = TTLCache(maxsize=1000, ttl=300)
 
-# This function performs an SMTP check to verify the email address
-def smtp_check(email):
-    domain = email.split('@')[-1]
-    
-    try:
-        # Check MX records to find the mail server
-        answers = dns.resolver.resolve(domain, 'MX')
-        mx_record = str(answers[0].exchange)
-        
-        # Create an SMTP connection with a timeout
-        with smtplib.SMTP(mx_record, timeout=10) as server:
-            server.set_debuglevel(0)  # Turn off debug output
-            server.helo()  # Greet the server
-            server.mail('me@domain.com')  # The sender (can be anything)
-            code, message = server.rcpt(email)  # Try to send to the recipient
-            
-            # If the server returns a success code (250), the email is valid
-            if code == 250:
-                return True
-            else:
-                print(f"SMTP validation failed for {email}: {message}")
-                return False
-    except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, smtplib.SMTPException, socket.timeout, Exception) as e:
-        print(f"Error in SMTP validation for {email}: {str(e)}")
-        return False
+# Thread pool for concurrent processing
+executor = ThreadPoolExecutor(max_workers=10)
 
-# This is the function to check email validity
 def is_valid_email(email):
     # Check email format
     if not re.match(EMAIL_REGEX, email):
-        print(f"Invalid email format: {email}")
         return False
 
-    # First perform MX check
+    # Extract domain from email
     domain = email.split('@')[-1]
+
+    # Check DNS cache
     if domain in dns_cache:
-        if dns_cache[domain] is False:
-            print(f"Domain {domain} is known to be invalid")
-            return False
-    
+        return dns_cache[domain]
+
     try:
-        # Check MX record (Mail Exchange) for the domain
+        # Check if domain has MX records
         dns.resolver.resolve(domain, 'MX')
         dns_cache[domain] = True
-        print(f"MX record found for domain {domain}")
-    except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.exception.Timeout) as e:
-        print(f"MX Record check failed for {email}: {str(e)}")
+        return True
+    except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.exception.Timeout):
         dns_cache[domain] = False
         return False
 
-    # Now perform SMTP check for validity
-    if not smtp_check(email):
-        return False
-
-    return True
-
-# API endpoint to verify emails
 @app.route('/verify', methods=['POST'])
 def verify_emails():
     data = request.get_json()
     emails = data.get('emails', [])
 
-    valid_emails = []
-    for email in emails:
-        if is_valid_email(email):
-            valid_emails.append(email)
-
-    print(f"Valid Emails: {valid_emails}")  # Debugging line
+    # Concurrently process emails
+    results = list(executor.map(is_valid_email, emails))
+    valid_emails = [email for email, valid in zip(emails, results) if valid]
     return jsonify({'validEmails': valid_emails})
-
-# Route to serve the index.html page from the templates folder
-@app.route('/')
-def index():
-    return render_template('index.html')  # This will render the index.html from templates/
 
 # For testing purposes, you can generate a batch of invalid emails and print them
 if __name__ == '__main__':
