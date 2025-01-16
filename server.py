@@ -7,11 +7,12 @@ from flask import Flask, request, jsonify, render_template
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from cachetools import TTLCache
 import os
+import socket
 
 app = Flask(__name__)
 
 # Regular expression for email validation
-EMAIL_REGEX = r"^[a-zA-Z0-9._%+-]+@[a-zAYZ0-9.-]+\.[a-zA-Z]{2,}$"
+EMAIL_REGEX = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
 
 # Cache for DNS lookups (TTL: 300 seconds, max size: 1000 entries)
 dns_cache = TTLCache(maxsize=1000, ttl=300)
@@ -27,9 +28,9 @@ def smtp_check(email):
         # Check MX records to find the mail server
         answers = dns.resolver.resolve(domain, 'MX')
         mx_record = str(answers[0].exchange)
-        
-        # Create an SMTP connection
-        with smtplib.SMTP(mx_record) as server:
+
+        # Create an SMTP connection with a timeout
+        with smtplib.SMTP(mx_record, timeout=10) as server:
             server.set_debuglevel(0)  # Turn off debug output
             server.helo()  # Greet the server
             server.mail('me@domain.com')  # The sender (can be anything)
@@ -40,8 +41,8 @@ def smtp_check(email):
                 return True
             else:
                 return False
-    except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, smtplib.SMTPException, Exception) as e:
-        # In case of DNS lookup failure or SMTP errors, consider the email invalid
+    except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, smtplib.SMTPException, socket.timeout, Exception) as e:
+        # In case of DNS lookup failure, SMTP errors, or timeouts, consider the email invalid
         return False
 
 # This is the function to check email validity
@@ -81,7 +82,7 @@ def verify_emails():
     valid_emails = []
 
     # Break emails into batches of 200 or less
-    batch_size = 200
+    batch_size = 100  # A smaller batch size to speed up processing
     batches = [emails[i:i + batch_size] for i in range(0, len(emails), batch_size)]
 
     # Process each batch concurrently
