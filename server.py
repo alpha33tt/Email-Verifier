@@ -3,6 +3,7 @@ import dns.resolver
 from flask import Flask, request, jsonify
 from concurrent.futures import ThreadPoolExecutor
 from cachetools import TTLCache
+import os
 
 app = Flask(__name__)
 
