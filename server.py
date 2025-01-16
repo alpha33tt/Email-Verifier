@@ -51,7 +51,7 @@ def is_valid_email(email):
     if not re.match(EMAIL_REGEX, email):
         return False
 
-    # Check SMTP for validity
+    # First perform SMTP check for validity
     if not smtp_check(email):
         return False
 
