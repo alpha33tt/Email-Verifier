@@ -106,9 +106,14 @@
             const { validEmails } = await response.json();
             progressBar.value = 100;
 
-            output.textContent = validEmails.join('\n');
-            document.getElementById('copyButton').style.display = validEmails.length > 0 ? 'block' : 'none';
-            document.getElementById('downloadButton').style.display = validEmails.length > 0 ? 'block' : 'none';
+            // Check if valid emails were returned
+            if (validEmails.length > 0) {
+                output.textContent = validEmails.join('\n');
+                document.getElementById('copyButton').style.display = 'block';
+                document.getElementById('downloadButton').style.display = 'block';
+            } else {
+                output.textContent = 'No valid emails found.';
+            }
         });
 
         document.getElementById('copyButton').addEventListener('click', () => {
