@@ -2,6 +2,8 @@ from flask import Flask, render_template, request, jsonify
 import os
 import re
 import dns.resolver
+import smtplib
+from email.utils import parseaddr
 from concurrent.futures import ThreadPoolExecutor
 from cachetools import TTLCache
 
@@ -28,7 +30,14 @@ def verify_emails():
     # Concurrently process emails
     results = list(executor.map(is_valid_email, emails))
     valid_emails = [email for email, valid in zip(emails, results) if valid]
-    return jsonify({'validEmails': valid_emails})
+
+    # Check bounce-backs for valid emails
+    bounce_results = {email: smtp_check(email) for email in valid_emails}
+
+    return jsonify({
+        'validEmails': valid_emails,
+        'bounceResults': bounce_results
+    })
 
 def is_valid_email(email):
     # Check email format
@@ -50,6 +59,28 @@ def is_valid_email(email):
     except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.exception.Timeout):
         dns_cache[domain] = False
         return False
+
+def smtp_check(email):
+    """Verify the email's SMTP server to check for bounce-backs."""
+    try:
+        domain = email.split('@')[1]
+        # Connect to the SMTP server
+        server = smtplib.SMTP(domain, timeout=10)
+        server.set_debuglevel(0)  # No debug output
+        server.helo()
+
+        # Perform a simple SMTP MAIL FROM command
+        status, message = server.mail(parseaddr(email)[1])
+
+        server.quit()
+
+        if status == 250:
+            return "Valid"
+        else:
+            return "Invalid"
+    except Exception as e:
+        print(f"SMTP error for {email}: {e}")
+        return "Invalid"
 
 # For testing purposes, you can generate a batch of invalid emails and print them
 if __name__ == '__main__':
