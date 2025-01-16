@@ -3,6 +3,7 @@ import dns.resolver
 from flask import Flask, request, jsonify
 from concurrent.futures import ThreadPoolExecutor
 from cachetools import TTLCache
+import os  # Add this import
 
 app = Flask(__name__)
 
@@ -48,4 +49,4 @@ def verify_emails():
 
 # For testing purposes, you can generate a batch of invalid emails and print them
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
+    app.run(debug=True, host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))  # This line should now work correctly
