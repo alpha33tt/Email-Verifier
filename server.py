@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, jsonify
 import uuid
 import dns.resolver  # For MX record checking
 import smtplib       # For SMTP verification
+import os
 
 app = Flask(__name__)
 
