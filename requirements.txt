@@ -1,5 +1,4 @@
 Flask==2.2.2
 dnspython==2.2.1
 cachetools==5.0.0
-smtplib==3.10
 aiodns==3.0.0
