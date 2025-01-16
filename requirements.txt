@@ -1,4 +1,4 @@
 Flask
 dnspython
 cachetools
-request
+requests
