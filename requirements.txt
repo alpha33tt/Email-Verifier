@@ -1,4 +1,5 @@
-Flask==3.1.0
-Werkzeug>=3.1
-dnspython==2.3.0
-cachetools==5.2.1
+Flask==2.2.2
+dnsresolver==2.0.0
+cachetools==5.0.0
+smtplib==3.10
+aiodns==3.0.0
