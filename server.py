@@ -1,8 +1,6 @@
 import re
 import dns.resolver
 import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 from flask import Flask, request, jsonify
 from concurrent.futures import ThreadPoolExecutor
 from cachetools import TTLCache
@@ -19,39 +17,11 @@ dns_cache = TTLCache(maxsize=1000, ttl=300)
 # Thread pool for concurrent processing
 executor = ThreadPoolExecutor(max_workers=10)
 
-# SMTP settings (test email sending)
-SMTP_SERVER = "smtp.mailtrap.io"  # Replace with your SMTP server
-SMTP_PORT = 587
-SMTP_USER = "your_smtp_user"  # Your SMTP user
-SMTP_PASSWORD = "your_smtp_password"  # Your SMTP password
-SENDER_EMAIL = "test@yourdomain.com"  # Sender's email address (used for sending test emails)
-
-def send_test_email(recipient_email):
-    """Send a test email to the recipient to verify if it's valid."""
-    try:
-        # Create message
-        msg = MIMEMultipart()
-        msg['From'] = SENDER_EMAIL
-        msg['To'] = recipient_email
-        msg['Subject'] = 'Test Email for Verification'
-
-        body = 'This is a test email for verification purposes.'
-        msg.attach(MIMEText(body, 'plain'))
-
-        # Set up SMTP server and send email
-        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
-        server.starttls()
-        server.login(SMTP_USER, SMTP_PASSWORD)
-        server.sendmail(SENDER_EMAIL, recipient_email, msg.as_string())
-        server.quit()
-
-        return True  # Email was sent successfully
-    except smtplib.SMTPException as e:
-        print(f"Error sending email to {recipient_email}: {str(e)}")
-        return False  # Failed to send email
+# SMTP server settings (use mail server IP or host)
+SMTP_TIMEOUT = 10  # Timeout for SMTP connection
 
 def is_valid_email(email):
-    # Check email format with regex
+    # Check email format
     if not re.match(EMAIL_REGEX, email):
         return False
 
@@ -63,21 +33,42 @@ def is_valid_email(email):
         return dns_cache[domain]
 
     try:
-        # Check if domain has MX records (Mail Exchange records) in DNS
+        # Check if domain has MX records
         dns.resolver.resolve(domain, 'MX')
         dns_cache[domain] = True
-    except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.exception.Timeout) as e:
-        # NXDOMAIN: No such domain
-        # NoAnswer: Domain exists, but no MX record
-        # Timeout: DNS request failed
+        # Use SMTP to check if email is valid
+        if verify_smtp_email(email):
+            return True
+        else:
+            dns_cache[domain] = False
+            return False
+    except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.exception.Timeout):
         dns_cache[domain] = False
         return False
 
-    # After DNS check, send a test email to further validate the address
-    if send_test_email(email):
-        return True
-    else:
-        dns_cache[domain] = False
+def verify_smtp_email(email):
+    domain = email.split('@')[-1]
+    try:
+        # Get the mail server for the domain (MX record lookup)
+        mx_records = dns.resolver.resolve(domain, 'MX')
+        mail_server = str(mx_records[0].exchange)
+
+        # Connect to the mail server
+        with smtplib.SMTP(mail_server, 25, timeout=SMTP_TIMEOUT) as server:
+            server.set_debuglevel(0)  # Disable debug output
+
+            # Try to connect and send a RCPT TO command
+            server.helo()  # Say hello to the server
+            server.mail('example@domain.com')  # Sender email (dummy sender)
+            code, message = server.rcpt(email)  # Try to check recipient
+
+            # If 250 response code is returned, the email is valid
+            if code == 250:
+                return True
+            else:
+                return False
+    except (smtplib.SMTPException, dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, Exception) as e:
+        print(f"SMTP validation failed for {email}: {str(e)}")
         return False
 
 @app.route('/verify', methods=['POST'])
@@ -85,14 +76,11 @@ def verify_emails():
     data = request.get_json()
     emails = data.get('emails', [])
 
-    # Concurrently process emails using the ThreadPoolExecutor
+    # Concurrently process emails
     results = list(executor.map(is_valid_email, emails))
-
-    # Filter valid emails based on the results
     valid_emails = [email for email, valid in zip(emails, results) if valid]
-    
-    # Return valid emails as a JSON response
     return jsonify({'validEmails': valid_emails})
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
+
