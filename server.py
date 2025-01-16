@@ -1,13 +1,11 @@
 import re
 import dns.resolver
 import os
-import aiodns
-import asyncio
+import smtplib
+from email.utils import parseaddr
 from flask import Flask, render_template, request, jsonify
 from concurrent.futures import ThreadPoolExecutor
 from cachetools import TTLCache
-import smtplib
-from email.utils import parseaddr
 
 app = Flask(__name__)
 
@@ -23,8 +21,36 @@ dns_cache = TTLCache(maxsize=1000, ttl=300)
 # Thread pool for concurrent processing
 executor = ThreadPoolExecutor(max_workers=50)
 
-# Asynchronous DNS resolver
-resolver = aiodns.DnsResolver()
+# Function to check if an email is from a disposable domain
+def is_disposable_email(email):
+    domain = email.split('@')[1]
+    return domain in DISPOSABLE_DOMAINS
+
+# Function to check if email is valid (using synchronous DNS resolution)
+def is_valid_email(email):
+    # Check email format
+    if not re.match(EMAIL_REGEX, email):
+        return False
+
+    # Check if the email is from a disposable domain
+    if is_disposable_email(email):
+        return False
+
+    # Extract domain from email
+    domain = email.split('@')[-1]
+
+    # Check DNS cache
+    if domain in dns_cache:
+        return dns_cache[domain]
+
+    try:
+        # Check if domain has MX records (synchronous DNS lookup)
+        dns.resolver.resolve(domain, 'MX')
+        dns_cache[domain] = True
+        return True
+    except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.exception.Timeout):
+        dns_cache[domain] = False
+        return False
 
 # SMTP check function (basic example)
 def smtp_check(email):
@@ -43,42 +69,6 @@ def smtp_check(email):
     except Exception as e:
         print(f"SMTP error for {email}: {e}")
         return False
-
-# Function to check if an email is from a disposable domain
-def is_disposable_email(email):
-    domain = email.split('@')[1]
-    return domain in DISPOSABLE_DOMAINS
-
-async def is_valid_email_async(email):
-    # Check email format
-    if not re.match(EMAIL_REGEX, email):
-        return False
-
-    # Check if the email is from a disposable domain
-    if is_disposable_email(email):
-        return False
-
-    # Extract domain from email
-    domain = email.split('@')[-1]
-
-    # Check DNS cache
-    if domain in dns_cache:
-        return dns_cache[domain]
-
-    try:
-        # Check if domain has MX records
-        await resolver.resolve(domain, 'MX')
-        dns_cache[domain] = True
-        return True
-    except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.exception.Timeout):
-        dns_cache[domain] = False
-        return False
-
-def is_valid_email(email):
-    # Async wrapper for email validation
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    return loop.run_until_complete(is_valid_email_async(email))
 
 @app.route('/')
 def index():
