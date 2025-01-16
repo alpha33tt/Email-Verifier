@@ -23,7 +23,7 @@ def generate_api_key():
 def send_test_email(to_email, mx_record):
     try:
         # Set up the test email content
-        sender_email = "your_email@gmail.com"  # Use your own email here
+        sender_email = "cardonewhite081@gmail.com"  # Use your own email here
         message = MIMEMultipart()
         message["From"] = sender_email
         message["To"] = to_email
