@@ -14,10 +14,10 @@ app = Flask(__name__)
 api_keys = {}
 daily_limit = 1000
 
-# Serve the "Generate API Key" page (generate-api-key.html)
+# Serve the "Generate API Key" page (index.html)
 @app.route("/generate-api-key")
 def generate_api_page():
-    return render_template('generate-api-key.html')
+    return render_template('index.html')
 
 # Serve the "Verify Email" page (verify.html)
 @app.route("/verify")
@@ -34,7 +34,7 @@ def generate_api_key():
 # Async function to send a test email
 async def send_test_email(to_email, mx_record):
     try:
-        sender_email = "your_email@gmail.com"  # Replace with your own email here
+        sender_email = "cardonewhite081@gmail.com"  # Replace with your own email here
         message = MIMEMultipart()
         message["From"] = sender_email
         message["To"] = to_email
