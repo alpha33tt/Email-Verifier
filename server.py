@@ -1,9 +1,9 @@
-from flask import Flask, render_template, jsonify, request
-import uuid
 import smtplib
 import dns.resolver
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import uuid
+from flask import Flask, jsonify, request, render_template
 import os
 import asyncio
 import aiosmtplib
@@ -14,22 +14,22 @@ app = Flask(__name__)
 api_keys = {}
 daily_limit = 1000
 
+# Serve the "Generate API Key" page (generate-api-key.html)
+@app.route("/generate-api-key")
+def generate_api_page():
+    return render_template('generate-api-key.html')
+
+# Serve the "Verify Email" page (verify.html)
+@app.route("/verify")
+def verify_page():
+    return render_template('verify.html')
+
 # Generate API Key
 @app.route("/generate-api-key", methods=["POST"])
 def generate_api_key():
     api_key = str(uuid.uuid4())
     api_keys[api_key] = {"used_today": 0}
     return jsonify({"api_key": api_key})
-
-# Render the index page
-@app.route("/")
-def index():
-    return render_template("index.html")
-
-# Render the verify page
-@app.route("/verify")
-def verify():
-    return render_template("verify.html")
 
 # Async function to send a test email
 async def send_test_email(to_email, mx_record):
@@ -62,7 +62,7 @@ def get_mx_record(domain):
 
 # API endpoint to verify emails
 @app.route("/api/verify", methods=["POST"])
-async def verify_emails():
+def verify_emails():
     api_key = request.headers.get("API-Key")
     if not api_key or api_key not in api_keys:
         return jsonify({"error": "Invalid or missing API key"}), 403
@@ -75,29 +75,31 @@ async def verify_emails():
     valid_emails = []
     invalid_emails = []
 
-    # Process emails concurrently
-    tasks = []
-    for email in emails:
-        domain = email.split('@')[1]
-        mx_record = get_mx_record(domain)
+    # Process emails in batches of 100 to avoid overloading the server
+    batch_size = 100
+    email_batches = [emails[i:i + batch_size] for i in range(0, len(emails), batch_size)]
 
-        if mx_record:
-            task = asyncio.create_task(send_test_email(email, mx_record))
-            tasks.append((email, task))
-        else:
-            invalid_emails.append(email)
+    for batch in email_batches:
+        for email in batch:
+            domain = email.split('@')[1]
+            mx_record = get_mx_record(domain)
 
-    for email, task in tasks:
-        result = await task
-        if result:
-            valid_emails.append(email)
-        else:
-            invalid_emails.append(email)
+            if mx_record:
+                # If MX record is found, send a test email to verify the email
+                result = asyncio.run(send_test_email(email, mx_record))
+                if result:
+                    valid_emails.append(email)
+                else:
+                    invalid_emails.append(email)
+            else:
+                # If MX record is not found, mark email as invalid
+                invalid_emails.append(email)
 
     # Update the daily usage limit
     api_keys[api_key]["used_today"] += len(emails)
 
     return jsonify({"valid": valid_emails, "invalid": invalid_emails})
+
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
