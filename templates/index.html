@@ -54,6 +54,7 @@
             border-radius: 4px;
             min-height: 100px;
             white-space: pre-wrap;
+            font-family: monospace;
         }
         .copy-button, .download-button {
             background: #28a745;
@@ -67,6 +68,14 @@
             height: 20px;
             margin-top: 10px;
         }
+        #loading {
+            display: none;
+            margin-top: 20px;
+            text-align: center;
+        }
+        #loading img {
+            width: 50px;
+        }
     </style>
 </head>
 <body>
@@ -75,6 +84,9 @@
         <textarea id="emailInput" placeholder="Paste your emails here, separated by commas or new lines"></textarea>
         <button id="verifyButton">Verify Emails</button>
         <progress id="progressBar" value="0" max="100" style="display: none;"></progress>
+        <div id="loading">
+            <img src="https://i.imgur.com/llF5iyg.gif" alt="Loading..."> Verifying emails...
+        </div>
         <div id="output" class="output-box"></div>
         <button id="copyButton" class="copy-button" style="display: none;">Copy Valid Emails</button>
         <button id="downloadButton" class="download-button" style="display: none;">Download Valid Emails</button>
@@ -90,27 +102,62 @@
 
             const emails = emailInput.split(/[\n,]+/).map(email => email.trim());
             const progressBar = document.getElementById('progressBar');
+            const loading = document.getElementById('loading');
             const output = document.getElementById('output');
 
             progressBar.style.display = 'block';
+            loading.style.display = 'block';
             progressBar.value = 0;
+            output.textContent = '';  // Clear previous output
 
-            const response = await fetch('/verify', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ emails }),
-            });
+            const totalEmails = emails.length;
+            let validEmails = [];
+            let counter = 0;
 
-            const { validEmails } = await response.json();
+            // Helper function to update progress and output
+            const updateProgress = () => {
+                const progress = Math.floor((counter / totalEmails) * 100);
+                progressBar.value = progress;
+                output.textContent += `Valid email ${counter}: ${emails[counter-1]}\n`;
+                output.scrollTop = output.scrollHeight;  // Auto-scroll to bottom
+            };
+
+            // Iterate through the emails and verify them
+            for (let i = 0; i < totalEmails; i++) {
+                const email = emails[i];
+                try {
+                    const response = await fetch('/verify', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ emails: [email] }),
+                    });
+
+                    const { validEmails: verifiedEmails } = await response.json();
+                    if (verifiedEmails.includes(email)) {
+                        validEmails.push(email);
+                    }
+                } catch (error) {
+                    console.error('Error verifying email:', email, error);
+                }
+
+                counter++;
+                updateProgress();
+            }
+
             progressBar.value = 100;
+            loading.style.display = 'none';
 
-            output.textContent = validEmails.join('\n');
+            // Display valid emails in the output box
+            output.textContent += `\n\nVerified Emails:\n` + validEmails.join('\n');
+
+            // Show buttons if there are valid emails
             document.getElementById('copyButton').style.display = validEmails.length > 0 ? 'block' : 'none';
             document.getElementById('downloadButton').style.display = validEmails.length > 0 ? 'block' : 'none';
         });
 
+        // Copy valid emails to clipboard
         document.getElementById('copyButton').addEventListener('click', () => {
             const output = document.getElementById('output').textContent;
             navigator.clipboard.writeText(output).then(() => {
@@ -118,6 +165,7 @@
             });
         });
 
+        // Download valid emails as a text file
         document.getElementById('downloadButton').addEventListener('click', () => {
             const output = document.getElementById('output').textContent;
             const blob = new Blob([output], { type: 'text/plain' });
