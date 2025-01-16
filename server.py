@@ -1,6 +1,6 @@
 import re
 import dns.resolver
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify
 from concurrent.futures import ThreadPoolExecutor
 from cachetools import TTLCache
 import os
@@ -17,7 +17,7 @@ dns_cache = TTLCache(maxsize=1000, ttl=300)
 executor = ThreadPoolExecutor(max_workers=10)
 
 def is_valid_email(email):
-    # Check email format
+    # Check email format with regex
     if not re.match(EMAIL_REGEX, email):
         return False
 
@@ -29,28 +29,31 @@ def is_valid_email(email):
         return dns_cache[domain]
 
     try:
-        # Check if domain has MX records
+        # Check if domain has MX records (Mail Exchange records) in DNS
         dns.resolver.resolve(domain, 'MX')
         dns_cache[domain] = True
         return True
-    except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.exception.Timeout):
+    except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.exception.Timeout) as e:
+        # NXDOMAIN: No such domain
+        # NoAnswer: Domain exists, but no MX record
+        # Timeout: DNS request failed
         dns_cache[domain] = False
         return False
-
-# Route to serve index.html (home page)
-@app.route('/')
-def home():
-    return render_template('index.html')  # This assumes index.html is in the templates folder
 
 @app.route('/verify', methods=['POST'])
 def verify_emails():
     data = request.get_json()
     emails = data.get('emails', [])
 
-    # Concurrently process emails
+    # Concurrently process emails using the ThreadPoolExecutor
     results = list(executor.map(is_valid_email, emails))
+
+    # Filter valid emails based on the results
     valid_emails = [email for email, valid in zip(emails, results) if valid]
+    
+    # Return valid emails as a JSON response
     return jsonify({'validEmails': valid_emails})
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
+
