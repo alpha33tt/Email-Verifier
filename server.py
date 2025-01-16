@@ -1,11 +1,11 @@
 import re
 import dns.resolver
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, render_template
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from cachetools import TTLCache
 import os
 
-app = Flask(__name__, static_folder="static")
+app = Flask(__name__)
 
 # Regular expression for email validation
 EMAIL_REGEX = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
@@ -68,10 +68,10 @@ def process_batch(batch):
     results = [email for email in batch if is_valid_email(email)]
     return results
 
-# Route to serve the index.html page
+# Route to serve the index.html page from the templates folder
 @app.route('/')
 def index():
-    return send_from_directory('static', 'index.html')
+    return render_template('index.html')  # This will render the index.html from templates/
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
