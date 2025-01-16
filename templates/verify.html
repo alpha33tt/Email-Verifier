@@ -141,6 +141,7 @@
         var apiKey = ''; // API key will be dynamically fetched
 
         $(document).ready(function() {
+            // Fetch API key from the server when the page loads
             $.ajax({
                 url: '/generate-api-key',
                 type: 'POST',
@@ -153,6 +154,7 @@
                 }
             });
 
+            // Handle form submission
             $('#email-form').submit(function(event) {
                 event.preventDefault();
 
@@ -178,16 +180,28 @@
                     },
                     data: JSON.stringify({ emails: emails }),
                     success: function(response) {
-                        // Hide spinner
+                        // Hide spinner once verification is done
                         $('#spinner').hide();
 
-                        // Show valid and invalid emails
+                        // Display results
                         response.valid.forEach(function(email) {
-                            $('#valid-emails').append('<li class="valid">' + email + '</li>');
+                            $('#valid-emails').append(`
+                                <li class="valid">
+                                    ${email.email} 
+                                    <br> MX Record: ${email.mx_record} 
+                                    <br> SMTP Verified: ${email.smtp_verified ? "Yes" : "No"} 
+                                    <br> Blacklisted: ${email.blacklisted ? "Yes" : "No"} 
+                                    <br> Risk Score: ${email.risk_score}
+                                </li>
+                            `);
                         });
 
                         response.invalid.forEach(function(email) {
-                            $('#invalid-emails').append('<li class="invalid">' + email + '</li>');
+                            $('#invalid-emails').append(`
+                                <li class="invalid">
+                                    ${email} 
+                                </li>
+                            `);
                         });
                     },
                     error: function(error) {
