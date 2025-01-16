@@ -82,6 +82,7 @@ def verify_emails():
         if is_valid_email(email):
             valid_emails.append(email)
 
+    print(f"Valid Emails: {valid_emails}")  # Debugging line
     return jsonify({'validEmails': valid_emails})
 
 # Route to serve the index.html page from the templates folder
