@@ -38,6 +38,11 @@ def generate_api_key():
     api_keys[api_key] = {"used_today": 0}
     return jsonify({"api_key": token})
 
+# Route for the Email Validation page
+@app.route("/verify")
+def verify_page():
+    return render_template("verify.html")
+
 # API endpoint to validate emails
 @app.route("/api/verify", methods=["POST"])
 def verify_emails():
