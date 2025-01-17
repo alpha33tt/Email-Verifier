@@ -222,22 +222,20 @@
 
                         // Display results
                         response.valid.forEach(function(email) {
-                            if (email.smtp_verified) { // Only add verified emails
-                                var emailInfo = `
-                                    <li class="valid">
-                                        ${email.email} 
-                                        <br>
-                                        <span class="valid-email-info">MX Record: ${email.mx_record}</span>
-                                        <br>
-                                        <span class="valid-email-info">SMTP Verified: ${email.smtp_verified ? "Yes" : "No"}</span>
-                                        <br>
-                                        <span class="valid-email-info">Blacklisted: ${email.blacklisted ? "Yes" : "No"}</span>
-                                        <br>
-                                        <span class="valid-email-info">Risk Score: ${email.risk_score}</span>
-                                    </li>
-                                `;
-                                $('#valid-emails').append(emailInfo);
-                            }
+                            var emailInfo = `
+                                <li class="valid">
+                                    ${email.email} 
+                                    <br>
+                                    <span class="valid-email-info">MX Record: ${email.mx_record}</span>
+                                    <br>
+                                    <span class="valid-email-info">SMTP Verified: ${email.smtp_verified ? "Yes" : "No"}</span>
+                                    <br>
+                                    <span class="valid-email-info">Blacklisted: ${email.blacklisted ? "Yes" : "No"}</span>
+                                    <br>
+                                    <span class="valid-email-info">Risk Score: ${email.risk_score}</span>
+                                </li>
+                            `;
+                            $('#valid-emails').append(emailInfo);
                         });
 
                         response.invalid.forEach(function(email) {
@@ -259,23 +257,17 @@
             $('#copy-button').click(function() {
                 var validEmails = [];
                 $('#valid-emails li').each(function() {
-                    var emailText = $(this).find("li").text().trim();
-                    if (emailText) {
-                        validEmails.push(emailText);
-                    }
+                    var email = $(this).text().split("\n")[0].trim();
+                    validEmails.push(email);
                 });
                 var emailText = validEmails.join(', ');
-                if (emailText) {
-                    navigator.clipboard.writeText(emailText)
-                        .then(function() {
-                            alert('Valid emails copied to clipboard!');
-                        })
-                        .catch(function(err) {
-                            alert('Error copying emails: ' + err);
-                        });
-                } else {
-                    alert('No verified valid emails to copy!');
-                }
+                navigator.clipboard.writeText(emailText)
+                    .then(function() {
+                        alert('Valid emails copied to clipboard!');
+                    })
+                    .catch(function(err) {
+                        alert('Error copying emails: ' + err);
+                    });
             });
         });
     </script>
