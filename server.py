@@ -6,9 +6,6 @@ import os
 import re
 import jwt
 import datetime
-import asyncio
-import aiodns
-import aiosmtplib
 from concurrent.futures import ThreadPoolExecutor
 from secrets import token_urlsafe
 
@@ -32,21 +29,14 @@ def index():
 # API endpoint to generate an API key (JWT)
 @app.route("/generate-api-key", methods=["POST"])
 def generate_api_key():
-    try:
-        # Generate a secure token
-        api_key = token_urlsafe(32)  # Strong API key generation
-        expiration = datetime.datetime.utcnow() + datetime.timedelta(days=1)  # 1 day expiration
+    # Generate a secure token
+    api_key = token_urlsafe(32)  # Strong API key generation
+    expiration = datetime.datetime.utcnow() + datetime.timedelta(days=1)  # 1 day expiration
 
-        # Encode the JWT with expiration and key
-        token = jwt.encode({'api_key': api_key, 'exp': expiration}, app.config['SECRET_KEY'], algorithm='HS256')
-        api_keys[api_key] = {"used_today": 0}
-        
-        # Return the API key in the response
-        return jsonify({"api_key": token})
-    except Exception as e:
-        # Log the error for debugging
-        print(f"Error generating API key: {str(e)}")
-        return jsonify({"error": "Error generating API key. Please try again."}), 500
+    # Encode the JWT with expiration and key
+    token = jwt.encode({'api_key': api_key, 'exp': expiration}, app.config['SECRET_KEY'], algorithm='HS256')
+    api_keys[api_key] = {"used_today": 0}
+    return jsonify({"api_key": token})
 
 # Route for the Email Validation page
 @app.route("/verify")
@@ -55,7 +45,7 @@ def verify_page():
 
 # API endpoint to validate emails
 @app.route("/api/verify", methods=["POST"])
-async def verify_emails():
+def verify_emails():
     api_key_token = request.headers.get("API-Key")
     if not api_key_token:
         return jsonify({"error": "API key is missing"}), 403
@@ -80,19 +70,22 @@ async def verify_emails():
     valid_emails = []
     invalid_emails = []
 
-    # Use asyncio to process emails in parallel
-    results = await asyncio.gather(*[validate_single_email(email) for email in emails])
-
-    for result in results:
+    # Use ThreadPoolExecutor to process emails in parallel
+    futures = [executor.submit(validate_single_email, email) for email in emails]
+    
+    # Wait for all futures to complete and collect results
+    for future in futures:
+        result = future.result()
         if result["valid"]:
             valid_emails.append(result)
         else:
             invalid_emails.append(result["email"])
+
     api_keys[api_key]["used_today"] += len(emails)
 
     return jsonify({"valid": valid_emails, "invalid": invalid_emails})
 
-async def validate_single_email(email):
+def validate_single_email(email):
     """Validates a single email address."""
     result = {"email": email}
     try:
@@ -104,14 +97,11 @@ async def validate_single_email(email):
 
         # MX Record Lookup
         domain = email.split('@')[1]
-        mx_record = await get_mx_record(domain)
-        if not mx_record:
-            result["valid"] = False
-            result["error"] = "No MX record found"
-            return result
+        mx_records = dns.resolver.resolve(domain, 'MX')
+        mx_record = str(mx_records[0].exchange)
 
         # SMTP Verification (optional, but recommended)
-        smtp_verified = await verify_smtp(mx_record)
+        smtp_verified = verify_smtp(mx_record)
 
         # Blacklist Check (can use an external API or a list of known blacklisted domains)
         blacklisted = check_blacklist(domain)
@@ -139,26 +129,15 @@ def is_valid_email_syntax(email):
     regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     return bool(re.match(regex, email))
 
-async def get_mx_record(domain):
-    """Asynchronously get the MX record for the domain."""
-    resolver = aiodns.DNSResolver()
-    try:
-        answer = await resolver.resolve(domain, 'MX')
-        mx_record = str(answer[0].exchange)
-        return mx_record
-    except Exception as e:
-        raise Exception(f"Failed to get MX record: {e}")
-
-async def verify_smtp(mx_record):
+def verify_smtp(mx_record):
     """Verify SMTP for the domain (simplified version)."""
     try:
-        # Use the aiosmtplib library to connect asynchronously
-        smtp = aiosmtplib.SMTP(hostname=mx_record, port=25)
-        await smtp.connect()
-        await smtp.quit()
+        smtp = smtplib.SMTP(mx_record)
+        smtp.set_debuglevel(0)
+        smtp.quit()
         return True
-    except Exception as e:
-        raise Exception(f"SMTP verification failed: {e}")
+    except Exception:
+        return False
 
 def check_blacklist(domain):
     """Dummy blacklist check. This should be replaced with a real blacklist API."""
@@ -174,5 +153,6 @@ def calculate_risk_score(smtp_verified, blacklisted):
         score += 30
     return score
 
+# For testing purposes, you can generate a batch of invalid emails and print them
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
+    app.run(debug=True, host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))  # This line should now work correctly
