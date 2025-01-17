@@ -63,7 +63,7 @@ async def verify_emails():
     if api_keys[api_key]["used_today"] >= daily_limit:
         return jsonify({"error": "Daily limit reached"}), 403
 
-    data = await request.json
+    data = request.json
     emails = data.get("emails", [])
     valid_emails = []
     invalid_emails = []
