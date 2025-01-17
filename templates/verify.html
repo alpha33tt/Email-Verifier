@@ -151,6 +151,7 @@
                 },
                 error: function(error) {
                     console.log('Error generating API key: ', error);
+                    $('#error-message').text('Error generating API key. Please try again.');
                 }
             });
 
@@ -183,7 +184,7 @@
                         // Hide spinner once verification is done
                         $('#spinner').hide();
 
-                        // Display results
+                        // Display results for valid emails
                         response.valid.forEach(function(email) {
                             $('#valid-emails').append(`
                                 <li class="valid">
@@ -196,6 +197,7 @@
                             `);
                         });
 
+                        // Display results for invalid emails
                         response.invalid.forEach(function(email) {
                             $('#invalid-emails').append(`
                                 <li class="invalid">
@@ -203,6 +205,11 @@
                                 </li>
                             `);
                         });
+
+                        // If no valid or invalid emails are found
+                        if (response.valid.length === 0 && response.invalid.length === 0) {
+                            $('#error-message').text('No emails were validated. Please check the input format.');
+                        }
                     },
                     error: function(error) {
                         $('#spinner').hide();
