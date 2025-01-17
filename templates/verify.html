@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Email Validation</title>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-     <style>
+    <style>
         body {
             font-family: Arial, sans-serif;
             background-color: #f4f7fc;
@@ -158,6 +158,7 @@
         <div class="result-section" id="valid-results">
             <h2>Valid Emails</h2>
             <ul id="valid-emails"></ul>
+            <button class="copy-button" id="copy-button">Copy Valid Emails</button>
         </div>
 
         <div class="result-section" id="invalid-results">
@@ -221,21 +222,26 @@
 
                         // Display results
                         response.valid.forEach(function(email) {
-                            $('#valid-emails').append(`
+                            var emailInfo = `
                                 <li class="valid">
                                     ${email.email} 
-                                    <br> MX Record: ${email.mx_record} 
-                                    <br> SMTP Verified: ${email.smtp_verified ? "Yes" : "No"} 
-                                    <br> Blacklisted: ${email.blacklisted ? "Yes" : "No"} 
-                                    <br> Risk Score: ${email.risk_score}
+                                    <br>
+                                    <span class="valid-email-info">MX Record: ${email.mx_record}</span>
+                                    <br>
+                                    <span class="valid-email-info">SMTP Verified: ${email.smtp_verified ? "Yes" : "No"}</span>
+                                    <br>
+                                    <span class="valid-email-info">Blacklisted: ${email.blacklisted ? "Yes" : "No"}</span>
+                                    <br>
+                                    <span class="valid-email-info">Risk Score: ${email.risk_score}</span>
                                 </li>
-                            `);
+                            `;
+                            $('#valid-emails').append(emailInfo);
                         });
 
                         response.invalid.forEach(function(email) {
                             $('#invalid-emails').append(`
                                 <li class="invalid">
-                                    ${email} 
+                                    ${email}
                                 </li>
                             `);
                         });
@@ -245,6 +251,23 @@
                         $('#error-message').text('Error: ' + error.responseText);
                     }
                 });
+            });
+
+            // Handle Copy Button click
+            $('#copy-button').click(function() {
+                var validEmails = [];
+                $('#valid-emails li').each(function() {
+                    var email = $(this).text().split("\n")[0].trim();
+                    validEmails.push(email);
+                });
+                var emailText = validEmails.join(', ');
+                navigator.clipboard.writeText(emailText)
+                    .then(function() {
+                        alert('Valid emails copied to clipboard!');
+                    })
+                    .catch(function(err) {
+                        alert('Error copying emails: ' + err);
+                    });
             });
         });
     </script>
