@@ -73,8 +73,7 @@ async def verify_emails():
     invalid_emails = []
 
     # Use asyncio to process emails in parallel
-    loop = asyncio.get_event_loop()
-    results = await asyncio.gather(*[loop.run_in_executor(executor, validate_single_email, email) for email in emails])
+    results = await asyncio.gather(*[validate_single_email(email) for email in emails])
 
     for result in results:
         if result["valid"]:
@@ -124,6 +123,7 @@ async def validate_single_email(email):
         result["error"] = str(e)
 
     return result
+
 
 def is_valid_email_syntax(email):
     """Check the basic syntax of an email address."""
