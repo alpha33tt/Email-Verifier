@@ -1,14 +1,15 @@
 from flask import Flask, render_template, request, jsonify
 import uuid
-import dns.asyncresolver  # Async DNS resolver
+import dns.resolver
 import smtplib
 import os
 import re
 import jwt
 import datetime
 import asyncio
+import aiohttp
+from concurrent.futures import ThreadPoolExecutor
 from secrets import token_urlsafe
-import aiohttp  # For async HTTP requests if needed
 
 app = Flask(__name__)
 
@@ -19,14 +20,17 @@ app.config['SECRET_KEY'] = 'your_secret_key'  # Change this to a random, secure 
 api_keys = {}
 daily_limit = 1000
 
+# Setup ThreadPoolExecutor to parallelize email validation tasks
+executor = ThreadPoolExecutor(max_workers=10)  # Adjust the number of concurrent tasks
+
 # Route for the API Key generation page
 @app.route("/")
-async def index():
+def index():
     return render_template("index.html")
 
 # API endpoint to generate an API key (JWT)
 @app.route("/generate-api-key", methods=["POST"])
-async def generate_api_key():
+def generate_api_key():
     # Generate a secure token
     api_key = token_urlsafe(32)  # Strong API key generation
     expiration = datetime.datetime.utcnow() + datetime.timedelta(days=1)  # 1 day expiration
@@ -38,7 +42,7 @@ async def generate_api_key():
 
 # Route for the Email Validation page
 @app.route("/verify")
-async def verify_page():
+def verify_page():
     return render_template("verify.html")
 
 # API endpoint to validate emails
@@ -68,9 +72,9 @@ async def verify_emails():
     valid_emails = []
     invalid_emails = []
 
-    # Use async to validate emails concurrently
-    tasks = [validate_single_email(email) for email in emails]
-    results = await asyncio.gather(*tasks)
+    # Use asyncio to process emails in parallel
+    loop = asyncio.get_event_loop()
+    results = await asyncio.gather(*[loop.run_in_executor(executor, validate_single_email, email) for email in emails])
 
     for result in results:
         if result["valid"]:
@@ -92,21 +96,13 @@ async def validate_single_email(email):
             result["error"] = "Invalid email syntax"
             return result
 
-        # MX Record Lookup (async version)
+        # MX Record Lookup
         domain = email.split('@')[1]
-        mx_records = await resolve_mx(domain)
-        if not mx_records:
-            result["valid"] = False
-            result["error"] = "No MX records found"
-            return result
+        mx_records = dns.resolver.resolve(domain, 'MX')
         mx_record = str(mx_records[0].exchange)
 
-        # SMTP Verification (optional, but recommended) - async
-        smtp_verified = await verify_smtp(mx_record)
-        if not smtp_verified:
-            result["valid"] = False
-            result["error"] = "SMTP verification failed"
-            return result
+        # SMTP Verification (optional, but recommended)
+        smtp_verified = verify_smtp(mx_record)
 
         # Blacklist Check (can use an external API or a list of known blacklisted domains)
         blacklisted = check_blacklist(domain)
@@ -134,20 +130,12 @@ def is_valid_email_syntax(email):
     regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     return bool(re.match(regex, email))
 
-async def resolve_mx(domain):
-    """Asynchronous MX record lookup using `dns.asyncresolver`."""
+def verify_smtp(mx_record):
+    """Verify SMTP for the domain (simplified version)."""
     try:
-        mx_records = await dns.asyncresolver.resolve(domain, 'MX')
-        return mx_records
-    except dns.exception.DNSException:
-        return None
-
-async def verify_smtp(mx_record):
-    """Asynchronous SMTP verification."""
-    try:
-        reader, writer = await asyncio.open_connection(mx_record, 25)
-        writer.close()
-        await writer.wait_closed()
+        smtp = smtplib.SMTP(mx_record)
+        smtp.set_debuglevel(0)
+        smtp.quit()
         return True
     except Exception:
         return False
