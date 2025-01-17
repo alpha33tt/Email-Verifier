@@ -1,6 +1,6 @@
-Flask==2.2.3
-Werkzeug==2.0.3
-aiodns==3.0.0
-aiosmtplib==1.1.0
-dnspython==2.2.1
-PyJWT==2.6.0
+Flask
+Werkzeug
+aiodns
+aiosmtplib
+dnspython
+PyJWT
