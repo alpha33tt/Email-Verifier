@@ -1,5 +1,5 @@
 Flask[async]
-jwt
+pyjwt
 Werkzeug
 aiodns
 aiosmtplib
