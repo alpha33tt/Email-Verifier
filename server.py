@@ -1,15 +1,13 @@
+import re
+import smtplib
+import dns.resolver
+from email.utils import parseaddr
 from flask import Flask, render_template, request, jsonify
 import uuid
-import dns.resolver
-import smtplib
-import os
-import re
 import jwt
 import datetime
 from concurrent.futures import ThreadPoolExecutor
 from secrets import token_urlsafe
-from email.mime.text import MIMEText
-import socket
 
 app = Flask(__name__)
 
@@ -74,7 +72,7 @@ def verify_emails():
 
     # Use ThreadPoolExecutor to process emails in parallel
     futures = [executor.submit(validate_single_email, email) for email in emails]
-    
+
     # Wait for all futures to complete and collect results
     for future in futures:
         result = future.result()
@@ -102,33 +100,19 @@ def validate_single_email(email):
         mx_records = dns.resolver.resolve(domain, 'MX')
         mx_record = str(mx_records[0].exchange)
 
-        # SMTP Verification
+        # SMTP Verification (simulate sending test email)
         smtp_verified = verify_smtp(mx_record, email)
-
-        # Blacklist Check (can use an external API or a list of known blacklisted domains)
-        blacklisted = check_blacklist(domain)
-
-        # Risk Scoring (based on various factors)
-        risk_score = calculate_risk_score(smtp_verified, blacklisted)
 
         # If all checks are valid
         result.update({
-            "valid": True,
+            "valid": smtp_verified,
             "mx_record": mx_record,
-            "smtp_verified": smtp_verified,
-            "blacklisted": blacklisted,
-            "risk_score": risk_score
+            "smtp_verified": smtp_verified
         })
 
-    except dns.resolver.NoAnswer:
-        result["valid"] = False
-        result["error"] = "No MX record found for domain"
-    except dns.resolver.NXDOMAIN:
-        result["valid"] = False
-        result["error"] = "Domain not found"
     except Exception as e:
         result["valid"] = False
-        result["error"] = f"Error: {str(e)}"
+        result["error"] = str(e)
 
     return result
 
@@ -138,47 +122,30 @@ def is_valid_email_syntax(email):
     return bool(re.match(regex, email))
 
 def verify_smtp(mx_record, email):
-    """Verify SMTP for the domain by simulating an email delivery (bounce-back detection)."""
+    """Simulate an SMTP check for the email address."""
     try:
-        # Open an SMTP connection to the MX server
-        with smtplib.SMTP(mx_record, timeout=10) as server:
-            server.set_debuglevel(0)  # Disable debug output
-            
-            # Simulate the "MAIL FROM" and "RCPT TO" commands
-            sender = "test@yourdomain.com"  # Your sending address (doesn't need to exist)
-            recipient = email
-            
-            # Use EHLO to identify ourselves to the server
-            server.ehlo()
+        # Connect to the SMTP server
+        server = smtplib.SMTP(mx_record, 25, timeout=10)  # Use port 25 for SMTP
+        server.set_debuglevel(0)
 
-            # Check if the recipient address is valid
-            code, message = server.mail(sender)
-            if code != 250:
-                return False  # SMTP server rejected the sender
+        # Check if the email can be accepted by the SMTP server (HELO)
+        server.helo()
 
-            code, message = server.rcpt(recipient)
-            if code == 250:
-                return True  # Email address is valid, no bounce-back
-            else:
-                return False  # Bounce-back or rejection from the recipient server
+        # Attempt to send a MAIL FROM and RCPT TO to simulate an email sending attempt
+        server.mail("test@example.com")  # From an arbitrary test email address
+        code, message = server.rcpt(email)
 
-    except (smtplib.SMTPException, socket.error) as e:
-        # Catch any errors with SMTP or connection failures
+        # If the RCPT command succeeds, it's a valid email
+        if code == 250:
+            server.quit()
+            return True
+        else:
+            server.quit()
+            return False
+
+    except (smtplib.SMTPException, Exception) as e:
         return False
 
-def check_blacklist(domain):
-    """Dummy blacklist check. This should be replaced with a real blacklist API."""
-    blacklisted_domains = ['example.com']
-    return domain in blacklisted_domains
-
-def calculate_risk_score(smtp_verified, blacklisted):
-    """Calculate risk score based on SMTP verification and blacklist status."""
-    score = 0
-    if smtp_verified:
-        score += 50
-    if not blacklisted:
-        score += 30
-    return score
-
+# For testing purposes, you can generate a batch of invalid emails and print them
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))  # This line should now work correctly
+    app.run(debug=True, host='0.0.0.0', port=5000)
