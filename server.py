@@ -103,12 +103,16 @@ def validate_single_email(email):
         # SMTP Verification (simulate sending a test email)
         smtp_verified = verify_smtp(mx_record, email)
 
-        # If all checks are valid
-        result.update({
-            "valid": smtp_verified,
-            "mx_record": mx_record,
-            "smtp_verified": smtp_verified
-        })
+        # If SMTP verification fails, mark it as invalid
+        if not smtp_verified:
+            result["valid"] = False
+            result["error"] = "SMTP verification failed"
+        else:
+            result.update({
+                "valid": True,
+                "mx_record": mx_record,
+                "smtp_verified": smtp_verified
+            })
 
     except Exception as e:
         result["valid"] = False
