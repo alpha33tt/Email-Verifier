@@ -32,14 +32,21 @@ def index():
 # API endpoint to generate an API key (JWT)
 @app.route("/generate-api-key", methods=["POST"])
 def generate_api_key():
-    # Generate a secure token
-    api_key = token_urlsafe(32)  # Strong API key generation
-    expiration = datetime.datetime.utcnow() + datetime.timedelta(days=1)  # 1 day expiration
+    try:
+        # Generate a secure token
+        api_key = token_urlsafe(32)  # Strong API key generation
+        expiration = datetime.datetime.utcnow() + datetime.timedelta(days=1)  # 1 day expiration
 
-    # Encode the JWT with expiration and key
-    token = jwt.encode({'api_key': api_key, 'exp': expiration}, app.config['SECRET_KEY'], algorithm='HS256')
-    api_keys[api_key] = {"used_today": 0}
-    return jsonify({"api_key": token})
+        # Encode the JWT with expiration and key
+        token = jwt.encode({'api_key': api_key, 'exp': expiration}, app.config['SECRET_KEY'], algorithm='HS256')
+        api_keys[api_key] = {"used_today": 0}
+        
+        # Return the API key in the response
+        return jsonify({"api_key": token})
+    except Exception as e:
+        # Log the error for debugging
+        print(f"Error generating API key: {str(e)}")
+        return jsonify({"error": "Error generating API key. Please try again."}), 500
 
 # Route for the Email Validation page
 @app.route("/verify")
@@ -50,11 +57,9 @@ def verify_page():
 @app.route("/api/verify", methods=["POST"])
 async def verify_emails():
     api_key_token = request.headers.get("API-Key")
-    
     if not api_key_token:
-        print("API Key is missing or not passed in headers.")  # Debugging line
         return jsonify({"error": "API key is missing"}), 403
-    
+
     try:
         # Decode JWT and validate expiration
         decoded_token = jwt.decode(api_key_token, app.config['SECRET_KEY'], algorithms=['HS256'])
@@ -83,7 +88,6 @@ async def verify_emails():
             valid_emails.append(result)
         else:
             invalid_emails.append(result["email"])
-    
     api_keys[api_key]["used_today"] += len(emails)
 
     return jsonify({"valid": valid_emails, "invalid": invalid_emails})
@@ -170,6 +174,5 @@ def calculate_risk_score(smtp_verified, blacklisted):
         score += 30
     return score
 
-# For testing purposes, you can generate a batch of invalid emails and print them
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
