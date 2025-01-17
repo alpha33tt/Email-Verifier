@@ -7,7 +7,8 @@ import re
 import jwt
 import datetime
 import asyncio
-import aiohttp
+import aiodns
+import aiosmtplib
 from concurrent.futures import ThreadPoolExecutor
 from secrets import token_urlsafe
 
@@ -97,11 +98,14 @@ async def validate_single_email(email):
 
         # MX Record Lookup
         domain = email.split('@')[1]
-        mx_records = dns.resolver.resolve(domain, 'MX')
-        mx_record = str(mx_records[0].exchange)
+        mx_record = await get_mx_record(domain)
+        if not mx_record:
+            result["valid"] = False
+            result["error"] = "No MX record found"
+            return result
 
         # SMTP Verification (optional, but recommended)
-        smtp_verified = verify_smtp(mx_record)
+        smtp_verified = await verify_smtp(mx_record)
 
         # Blacklist Check (can use an external API or a list of known blacklisted domains)
         blacklisted = check_blacklist(domain)
@@ -124,18 +128,28 @@ async def validate_single_email(email):
 
     return result
 
-
 def is_valid_email_syntax(email):
     """Check the basic syntax of an email address."""
     regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     return bool(re.match(regex, email))
 
-def verify_smtp(mx_record):
+async def get_mx_record(domain):
+    """Asynchronously get the MX record for the domain."""
+    resolver = aiodns.DNSResolver()
+    try:
+        answer = await resolver.resolve(domain, 'MX')
+        mx_record = str(answer[0].exchange)
+        return mx_record
+    except Exception:
+        return None
+
+async def verify_smtp(mx_record):
     """Verify SMTP for the domain (simplified version)."""
     try:
-        smtp = smtplib.SMTP(mx_record)
-        smtp.set_debuglevel(0)
-        smtp.quit()
+        # Use the aiosmtplib library to connect asynchronously
+        smtp = aiosmtplib.SMTP(hostname=mx_record, port=25)
+        await smtp.connect()
+        await smtp.quit()
         return True
     except Exception:
         return False
