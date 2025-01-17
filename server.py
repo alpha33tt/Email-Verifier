@@ -1,9 +1,9 @@
-import re
-import smtplib
-import dns.resolver
-from email.utils import parseaddr
 from flask import Flask, render_template, request, jsonify
 import uuid
+import dns.resolver
+import smtplib
+import os
+import re
 import jwt
 import datetime
 from concurrent.futures import ThreadPoolExecutor
@@ -72,7 +72,7 @@ def verify_emails():
 
     # Use ThreadPoolExecutor to process emails in parallel
     futures = [executor.submit(validate_single_email, email) for email in emails]
-
+    
     # Wait for all futures to complete and collect results
     for future in futures:
         result = future.result()
@@ -100,7 +100,7 @@ def validate_single_email(email):
         mx_records = dns.resolver.resolve(domain, 'MX')
         mx_record = str(mx_records[0].exchange)
 
-        # SMTP Verification (simulate sending test email)
+        # SMTP Verification (simulate sending a test email)
         smtp_verified = verify_smtp(mx_record, email)
 
         # If all checks are valid
@@ -122,7 +122,7 @@ def is_valid_email_syntax(email):
     return bool(re.match(regex, email))
 
 def verify_smtp(mx_record, email):
-    """Simulate an SMTP check for the email address."""
+    """Verify SMTP for the domain (simplified version)."""
     try:
         # Connect to the SMTP server
         server = smtplib.SMTP(mx_record, 25, timeout=10)  # Use port 25 for SMTP
@@ -144,8 +144,9 @@ def verify_smtp(mx_record, email):
             return False
 
     except (smtplib.SMTPException, Exception) as e:
+        # If any error occurs during the SMTP process, mark the email as invalid
         return False
 
 # For testing purposes, you can generate a batch of invalid emails and print them
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))  # This line should now work correctly
