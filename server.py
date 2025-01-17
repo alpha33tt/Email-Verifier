@@ -88,28 +88,34 @@ def verify_emails():
 def validate_single_email(email):
     """Validates a single email address."""
     result = {"email": email}
+    
+    # Step 1: Syntax Check
+    if not is_valid_email_syntax(email):
+        result["valid"] = False
+        result["error"] = "Invalid email syntax"
+        return result
+
     try:
-        # Syntax Check
-        if not is_valid_email_syntax(email):
+        # Step 2: MX Record Lookup (check if the domain has mail exchange records)
+        domain = email.split('@')[1]
+        try:
+            mx_records = dns.resolver.resolve(domain, 'MX')
+            mx_record = str(mx_records[0].exchange)
+        except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN):
             result["valid"] = False
-            result["error"] = "Invalid email syntax"
+            result["error"] = "No MX records found for domain"
             return result
 
-        # MX Record Lookup
-        domain = email.split('@')[1]
-        mx_records = dns.resolver.resolve(domain, 'MX')
-        mx_record = str(mx_records[0].exchange)
-
-        # SMTP Verification (optional, but recommended)
+        # Step 3: SMTP Verification (check if the mail server is reachable)
         smtp_verified = verify_smtp(mx_record)
 
-        # Blacklist Check (can use an external API or a list of known blacklisted domains)
+        # Step 4: Blacklist Check
         blacklisted = check_blacklist(domain)
 
-        # Risk Scoring (based on various factors)
+        # Step 5: Risk Scoring
         risk_score = calculate_risk_score(smtp_verified, blacklisted)
 
-        # If all checks are valid
+        # If all checks pass, mark as valid
         result.update({
             "valid": True,
             "mx_record": mx_record,
@@ -132,16 +138,17 @@ def is_valid_email_syntax(email):
 def verify_smtp(mx_record):
     """Verify SMTP for the domain (simplified version)."""
     try:
-        smtp = smtplib.SMTP(mx_record)
-        smtp.set_debuglevel(0)
-        smtp.quit()
+        # Attempting connection to the SMTP server
+        smtp = smtplib.SMTP(mx_record, timeout=10)  # Adding timeout to prevent hanging
+        smtp.set_debuglevel(0)  # Optional, for debugging
+        smtp.quit()  # Terminate connection
         return True
-    except Exception:
-        return False
+    except (smtplib.SMTPException, TimeoutError, Exception) as e:
+        return False  # Mark invalid if any exception occurs
 
 def check_blacklist(domain):
     """Dummy blacklist check. This should be replaced with a real blacklist API."""
-    blacklisted_domains = ['example.com']
+    blacklisted_domains = ['example.com', 'spam.com']  # Add more blacklist domains
     return domain in blacklisted_domains
 
 def calculate_risk_score(smtp_verified, blacklisted):
