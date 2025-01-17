@@ -1,7 +1,4 @@
-Flask[async]
-pyjwt
-Werkzeug
-aiodns
-aiosmtplib
+Flask
+requests
 dnspython
-JWT
+pyjwt
