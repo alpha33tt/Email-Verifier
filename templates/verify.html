@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Email Validation</title>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <style>
+     <style>
         body {
             font-family: Arial, sans-serif;
             background-color: #f4f7fc;
@@ -104,6 +104,42 @@
             font-size: 16px;
             margin-top: 10px;
             text-align: center;
+        }
+
+        .copy-button {
+            margin-top: 10px;
+            padding: 10px 20px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            display: inline-block;
+            font-size: 14px;
+            transition: background-color 0.3s ease;
+        }
+
+        .copy-button:hover {
+            background-color: #218838;
+        }
+
+        .valid-email-info {
+            font-weight: bold;
+            margin-top: 5px;
+            color: #333;
+            transform: rotateY(10deg);
+            text-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+            padding: 4px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+        }
+
+        .valid-email-info span {
+            display: inline-block;
+            padding: 3px 8px;
+            margin: 3px;
+            background-color: #f4f7fc;
+            border-radius: 5px;
+            box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.1);
         }
     </style>
 </head>
