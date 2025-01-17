@@ -81,7 +81,6 @@ async def verify_emails():
             valid_emails.append(result)
         else:
             invalid_emails.append(result["email"])
-
     api_keys[api_key]["used_today"] += len(emails)
 
     return jsonify({"valid": valid_emails, "invalid": invalid_emails})
@@ -140,8 +139,8 @@ async def get_mx_record(domain):
         answer = await resolver.resolve(domain, 'MX')
         mx_record = str(answer[0].exchange)
         return mx_record
-    except Exception:
-        return None
+    except Exception as e:
+        raise Exception(f"Failed to get MX record: {e}")
 
 async def verify_smtp(mx_record):
     """Verify SMTP for the domain (simplified version)."""
@@ -151,8 +150,8 @@ async def verify_smtp(mx_record):
         await smtp.connect()
         await smtp.quit()
         return True
-    except Exception:
-        return False
+    except Exception as e:
+        raise Exception(f"SMTP verification failed: {e}")
 
 def check_blacklist(domain):
     """Dummy blacklist check. This should be replaced with a real blacklist API."""
