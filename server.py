@@ -50,9 +50,11 @@ def verify_page():
 @app.route("/api/verify", methods=["POST"])
 async def verify_emails():
     api_key_token = request.headers.get("API-Key")
+    
     if not api_key_token:
+        print("API Key is missing or not passed in headers.")  # Debugging line
         return jsonify({"error": "API key is missing"}), 403
-
+    
     try:
         # Decode JWT and validate expiration
         decoded_token = jwt.decode(api_key_token, app.config['SECRET_KEY'], algorithms=['HS256'])
@@ -81,6 +83,7 @@ async def verify_emails():
             valid_emails.append(result)
         else:
             invalid_emails.append(result["email"])
+    
     api_keys[api_key]["used_today"] += len(emails)
 
     return jsonify({"valid": valid_emails, "invalid": invalid_emails})
