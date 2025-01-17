@@ -8,6 +8,8 @@ import jwt
 import datetime
 from concurrent.futures import ThreadPoolExecutor
 from secrets import token_urlsafe
+from email.mime.text import MIMEText
+import socket
 
 app = Flask(__name__)
 
@@ -101,7 +103,7 @@ def validate_single_email(email):
         mx_record = str(mx_records[0].exchange)
 
         # SMTP Verification
-        smtp_verified = verify_smtp(mx_record)
+        smtp_verified = verify_smtp(mx_record, email)
 
         # Blacklist Check (can use an external API or a list of known blacklisted domains)
         blacklisted = check_blacklist(domain)
@@ -135,14 +137,33 @@ def is_valid_email_syntax(email):
     regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     return bool(re.match(regex, email))
 
-def verify_smtp(mx_record):
-    """Verify SMTP for the domain (simplified version)."""
+def verify_smtp(mx_record, email):
+    """Verify SMTP for the domain by simulating an email delivery (bounce-back detection)."""
     try:
-        smtp = smtplib.SMTP(mx_record, timeout=10)
-        smtp.set_debuglevel(0)  # Disable debug output
-        smtp.quit()
-        return True
-    except Exception as e:
+        # Open an SMTP connection to the MX server
+        with smtplib.SMTP(mx_record, timeout=10) as server:
+            server.set_debuglevel(0)  # Disable debug output
+            
+            # Simulate the "MAIL FROM" and "RCPT TO" commands
+            sender = "test@yourdomain.com"  # Your sending address (doesn't need to exist)
+            recipient = email
+            
+            # Use EHLO to identify ourselves to the server
+            server.ehlo()
+
+            # Check if the recipient address is valid
+            code, message = server.mail(sender)
+            if code != 250:
+                return False  # SMTP server rejected the sender
+
+            code, message = server.rcpt(recipient)
+            if code == 250:
+                return True  # Email address is valid, no bounce-back
+            else:
+                return False  # Bounce-back or rejection from the recipient server
+
+    except (smtplib.SMTPException, socket.error) as e:
+        # Catch any errors with SMTP or connection failures
         return False
 
 def check_blacklist(domain):
