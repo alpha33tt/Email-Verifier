@@ -147,17 +147,20 @@ def verify_smtp(mx_record):
         return False  # Mark invalid if any exception occurs
 
 def check_blacklist(domain):
-    """Dummy blacklist check. This should be replaced with a real blacklist API."""
-    blacklisted_domains = ['example.com', 'spam.com']  # Add more blacklist domains
+    """Check if the domain is blacklisted."""
+    # List of known blacklisted domains (can be expanded)
+    blacklisted_domains = ['example.com', 'spam.com', 'trashmail.com']  # Example blacklist
+    
+    # Check if the domain is in the blacklisted list
     return domain in blacklisted_domains
 
 def calculate_risk_score(smtp_verified, blacklisted):
     """Calculate risk score based on SMTP verification and blacklist status."""
     score = 0
     if smtp_verified:
-        score += 50
+        score += 50  # Add score if SMTP verification succeeds
     if not blacklisted:
-        score += 30
+        score += 30  # Add score if domain is not blacklisted
     return score
 
 # For testing purposes, you can generate a batch of invalid emails and print them
