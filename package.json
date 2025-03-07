@@ -7,11 +7,10 @@
     "start": "node src/server.js"
   },
   "engines": {
-    "node": "18.x"
+    "node": "18.x"  // Specifies the supported Node.js version
   },
   "dependencies": {
-    "express": "^4.17.1",
-    "some-other-dependencies": "^version"
+    "express": "^4.17.1"  // Example dependency
   },
   "author": "",
   "license": "ISC"
