@@ -4,8 +4,8 @@
   "description": "Email Validation Tool",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
-  },
+  "start": "node src/server.js"
+},
   "dependencies": {
     "express": "^4.17.1"
   },
