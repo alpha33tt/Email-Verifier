@@ -1,0 +1,19 @@
+{
+  "name": "email-validation",
+  "version": "1.0.0",
+  "description": "Email Validation App using MX Lookup",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.17.1",
+    "dns": "^0.2.2",
+    "mx-records": "^2.1.0"
+  },
+  "engines": {
+    "node": "16.x"
+  },
+  "author": "",
+  "license": "ISC"
+}
