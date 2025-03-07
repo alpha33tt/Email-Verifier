@@ -1,20 +1,19 @@
 const express = require('express');
 const dns = require('dns');
-const mxRecords = require('mx-records');
 
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000;
 
 app.use(express.json());
 
-// Validate email domain with MX record lookup
+// Function to check if a domain has valid MX records
 function isValidDomain(domain) {
     return new Promise((resolve, reject) => {
-        mxRecords(domain, (err, records) => {
-            if (err || records.length === 0) {
-                reject(false);
+        dns.resolveMx(domain, (err, addresses) => {
+            if (err || addresses.length === 0) {
+                reject(false);  // No valid MX records found
             } else {
-                resolve(true);
+                resolve(true);   // MX records found
             }
         });
     });
