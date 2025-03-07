@@ -7,8 +7,7 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.17.1",
-    "email-verifier": "^1.0.1"
+    "express": "^4.17.1"
   },
   "engines": {
     "node": "16.x"
